@@ -88,7 +88,7 @@ def figura_resumen(nombres, vx, vy, ventana, fmax, rango_db):
     n = len(nombres)
     dt = CF.tfin/(vx.shape[1]-1)
     t = np.arange(vx.shape[1])*dt
-    fig, axes = plt.subplots(n, 2, figsize=(14, 1.9*n+1.2), sharex=True, constrained_layout=True,
+    fig, axes = plt.subplots(n, 2, figsize=(14, 1.9*n+1.2), sharex=True, constrained_layout=True, squeeze=False,
                              gridspec_kw=dict(width_ratios=[1, 1]))
     for k, nom in enumerate(nombres):
         mod = np.hypot(vx[k], vy[k])

@@ -8,9 +8,9 @@ Misma forma que en el programa original:
 
 (respuesta de un oscilador sobreamortiguado: sube suavemente, tiene un máximo y
 decae). La amplitud del máximo no depende de H; H solo cambia la escala de
-tiempo. En el original h = 5 (H = 50), con lo que el espectro cae a -40 dB
-recién cerca de 40 Hz. Aquí h se calcula para que el espectro haya caído a
-NIVEL_FUENTE_DB (por defecto -40 dB, es decir 1 % de la amplitud máxima) a
+tiempo. En el original h = 5 (H = 50), con lo que el espectro cae a -14 dB a 8 Hz y
+a -40 dB recién cerca de 40 Hz. Aquí h se calcula para que el espectro haya caído a
+NIVEL_FUENTE_DB (por defecto -20 dB, es decir 10 % de la amplitud máxima) a
 FMAX_FUENTE (por defecto 8 Hz).
 
 Espectro: |R(f)| = w*(a2-a1) / ( sqrt(a1^2+(2 pi f)^2) * sqrt(a2^2+(2 pi f)^2) ),

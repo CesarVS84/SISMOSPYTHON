@@ -24,7 +24,9 @@ TINTA = '#1f2933'
 TINTA_SUAVE = '#52606d'
 AIRE = '#e4e7eb'
 CPML_COLOR = '#52606d'
-ESTACION = '#0b7285'
+ESTACION = '#0b7285'          # estación: la onda aún no llega
+COLOR_P = '#f08c00'           # llegó la onda P
+COLOR_S = '#c2255c'           # llegó la onda S
 FUENTE = '#c92a2a'
 CMAP_COMPONENTE = 'RdBu_r'      # divergente: azul / blanco (cero) / rojo
 CMAP_MODULO = 'viridis'         # secuencial: de menor a mayor módulo
@@ -52,6 +54,20 @@ def estacion_superficie_mas_cercana():
     return mejor
 
 
+def distancia_a_la_fuente(nombre):
+    """Distancia en línea recta (m) entre la estación y la fuente."""
+    i, j = posiciones_estaciones()[nombre]
+    fi, fj = TOP.sour1
+    return float(np.hypot((i-fi)*CF.dx, (j-fj)*CF.dy))
+
+
+def tiempos_llegada(nombre):
+    """(t_P, t_S) teóricos en s: distancia en línea recta / vp y / vs. Para la fuente (F)
+    la distancia es cero. No incluyen el retraso del pulso (su máximo está en ~0.2 s)."""
+    r = distancia_a_la_fuente(nombre)
+    return r/CF.vp, r/CF.vs
+
+
 def serie(vx, vy, componente):
     """Serie temporal de 'vx', 'vy' o 'modulo'."""
     if componente == 'vx':
@@ -62,16 +78,20 @@ def serie(vx, vy, componente):
 
 
 def stft(x, dt, ventana, solape):
-    """STFT con ventana de Hann. Devuelve (t centro de cada ventana, f, |X|)."""
+    """STFT con ventana de Hann. Devuelve (t centro de cada ventana, f, |X|).
+    La señal se rellena (por reflexión) media ventana a cada lado, de modo que los centros de las
+    ventanas cubren desde t = 0 hasta el final (sin el rellenado la primera ventana completa
+    quedaría centrada en ventana/2). En los bordes la ventana ve en parte una copia reflejada de la señal."""
     nv = int(round(ventana/dt))
     salto = max(1, int(round(nv*(1-solape))))
     w = np.hanning(nv)
     x = x - x.mean()
+    x = np.pad(x, nv//2, mode='reflect')        # reflexión: sin escalón en los bordes
     pos = np.arange(0, len(x)-nv+1, salto)
     nfft = 1 << int(np.ceil(np.log2(4*nv)))              # relleno con ceros: curvas más suaves
     X = np.array([np.abs(np.fft.rfft(w*x[p:p+nv], nfft)) for p in pos]).T
     f = np.fft.rfftfreq(nfft, dt)
-    return (pos + nv/2)*dt, f, X/w.sum()*2
+    return pos*dt, f, X/w.sum()*2
 
 
 def espectrograma_db(x, dt, ventana=2.0, solape=0.9, fmax=16., rango_db=50., ref=None):
@@ -160,8 +180,22 @@ def escala_campo(valores, vmax, gamma, con_signo):
     return np.sign(r)*np.abs(r)**gamma if con_signo else r**gamma
 
 
+def estado_estacion(nombre, t):
+    """0: la onda aún no llega; 1: ya llegó la P; 2: ya llegó la S (tiempos teóricos)."""
+    tp, ts = tiempos_llegada(nombre)
+    return 2 if t >= ts else (1 if t >= tp else 0)
+
+
+def actualizar_marcas(ax, t):
+    """Cambia el color de las estaciones del mapa según lleguen la onda P y la S."""
+    for nombre, ln in ax._marcas.items():
+        e = estado_estacion(nombre, t)
+        ln.set_markerfacecolor((ESTACION, COLOR_P, COLOR_S)[e])
+        ln.set_markersize(9.5 if (e and min(t-tiempos_llegada(nombre)[e-1], 9) < 0.25) else 6.5)   # destello al llegar
+
+
 def dibujar_mapa(ax, campo, vmax, gamma=0.5, con_signo=True, titulo='', estaciones=True,
-                 etiquetas=True):
+                 etiquetas=True, t=None):
     """Dibuja el campo [j, i] con la topografía, el aire, la capa CPML y las estaciones.
     Devuelve la imagen (para actualizarla en la animación)."""
     nx, ny, dx, dy = CF.nx, CF.ny, CF.dx, CF.dy
@@ -194,8 +228,10 @@ def dibujar_mapa(ax, campo, vmax, gamma=0.5, con_signo=True, titulo='', estacion
 
     if estaciones:
         halo = [pe.withStroke(linewidth=2.5, foreground='white')]
+        ax._marcas = {}
         for k, (i, j) in enumerate(TOP.estaciones):
-            ax.plot(i*dx*km, j*dy*km, 'o', ms=6.5, mfc=ESTACION, mec='white', mew=1.3, zorder=7)
+            ln, = ax.plot(i*dx*km, j*dy*km, 'o', ms=6.5, mfc=ESTACION, mec='white', mew=1.3, zorder=7)
+            ax._marcas[NOMBRES_ESTACIONES[k]] = ln
             if etiquetas:
                 ax.annotate(NOMBRES_ESTACIONES[k], (i*dx*km, j*dy*km), xytext=(4, 7), textcoords='offset points',
                             fontsize=8, color=TINTA, path_effects=halo, zorder=8)
@@ -205,6 +241,8 @@ def dibujar_mapa(ax, campo, vmax, gamma=0.5, con_signo=True, titulo='', estacion
             ax.annotate('F', (i*dx*km, j*dy*km), xytext=(6, -11), textcoords='offset points', fontsize=8,
                         color=TINTA, path_effects=halo, zorder=8)
 
+    if estaciones and t is not None:
+        actualizar_marcas(ax, t)
     ax.set_xlim(ext[0], ext[1])
     ax.set_ylim(ext[2], ext[3])
     ax.set_xlabel('x (km)', color=TINTA_SUAVE)
@@ -235,10 +273,12 @@ def leyenda_modelo(fig, y=0.01):
         Patch(facecolor=AIRE, edgecolor='none', label='Aire'),
         Patch(facecolor='none', edgecolor=CPML_COLOR, hatch='///', label='Capa CPML (absorbente)'),
         Line2D([], [], color=TINTA, lw=1.4, label='Superficie libre (topografía)'),
-        Line2D([], [], marker='o', ls='', mfc=ESTACION, mec='white', ms=7, label='Estaciones E1–E9'),
+        Line2D([], [], marker='o', ls='', mfc=ESTACION, mec='white', ms=7, label='Estación (aún sin onda)'),
+        Line2D([], [], marker='o', ls='', mfc=COLOR_P, mec='white', ms=7, label='llegó la onda P'),
+        Line2D([], [], marker='o', ls='', mfc=COLOR_S, mec='white', ms=7, label='llegó la onda S'),
         Line2D([], [], marker='*', ls='', mfc=FUENTE, mec='white', ms=12, label='Fuente (F)'),
     ]
-    fig.legend(handles=elementos, loc='lower center', ncol=5, frameon=False, fontsize=9,
+    fig.legend(handles=elementos, loc='lower center', ncol=4, frameon=False, fontsize=9,
                bbox_to_anchor=(0.5, y), labelcolor=TINTA_SUAVE)
 
 

@@ -2,7 +2,8 @@
 """
 animacion_estacion.py: una animación por estación con su sismograma y su espectrograma.
 
-Cada video muestra cómo se va construyendo, con el tiempo, el sismograma (vx y vy) y el
+Cada video marca la llegada teórica de las ondas P (naranja) y S (magenta) y cambia de color
+la estación en el esquema al llegar cada una. Muestra cómo se va construyendo, con el tiempo, el sismograma (vx y vy) y el
 espectrograma de la estación, con un cursor en el tiempo actual. A la derecha, un
 esquema del modelo con la posición de la estación. Se genera un video por estación
 (E1 ... E9) y uno para la fuente (F).
@@ -59,6 +60,7 @@ def animar_estacion(nombre, vx, vy, carpeta_salida, componente, paso, fps, venta
     axx, axy, axs = (fig.add_subplot(gs[k, 0]) for k in range(3))
     axm = fig.add_subplot(gs[:, 1])
 
+    t_p, t_s = vc.tiempos_llegada(nombre)
     lineas, cursores = [], []
     for ax, y, etiqueta, color in ((axx, vx, 'vx (m/s)', '#0b7285'), (axy, vy, 'vy (m/s)', '#5f3dc4')):
         ax.plot(t, y, color='#cbd2d9', lw=0.8)
@@ -70,6 +72,11 @@ def animar_estacion(nombre, vx, vy, carpeta_salida, componente, paso, fps, venta
         ax.set_ylabel(etiqueta, color=vc.TINTA_SUAVE, fontsize=9)
         _estilo(ax)
         plt.setp(ax.get_xticklabels(), visible=False)
+        if nombre != 'F':
+            for tt, lab, col in ((t_p, 'P', vc.COLOR_P), (t_s, 'S', vc.COLOR_S)):
+                ax.axvline(tt, color=col, lw=1.4, ls=(0, (4, 2)))
+                ax.annotate(lab, (tt, 1.0), xycoords=('data', 'axes fraction'), xytext=(-11 if lab == 'P' else 4, -13), textcoords='offset points',
+                            color=col, fontsize=10, weight='bold')
         lineas.append((ln, y))
         cursores.append(cur)
 
@@ -80,6 +87,9 @@ def animar_estacion(nombre, vx, vy, carpeta_salida, componente, paso, fps, venta
     axs.axhline(CF.FMAX_FUENTE, color='white', lw=1.2, ls=(0, (5, 3)))
     axs.axhline(CF.FMAX_FUENTE, color=vc.TINTA, lw=0.6, ls=(0, (5, 3)))
     cur_s = axs.axvline(0, color='white', lw=1.0)
+    if nombre != 'F':
+        for tt, col in ((t_p, vc.COLOR_P), (t_s, vc.COLOR_S)):
+            axs.axvline(tt, color=col, lw=1.4, ls=(0, (4, 2)))
     axs.set_xlim(0, CF.tfin)
     axs.set_ylim(0, fmax)
     axs.set_xlabel('tiempo (s)', color=vc.TINTA_SUAVE)
@@ -103,8 +113,8 @@ def animar_estacion(nombre, vx, vy, carpeta_salida, componente, paso, fps, venta
         axm.plot(i*dx*km, j*dy*km, 'o', ms=4, mfc='#9aa5b1', mec='white', mew=0.8)
     fi, fj = vc.TOP.sour1
     axm.plot(fi*dx*km, fj*dy*km, '*', ms=11, mfc=vc.FUENTE, mec='white', mew=0.8)
-    axm.plot(pos[0]*dx*km, pos[1]*dy*km, 'o' if nombre != 'F' else '*', ms=11 if nombre != 'F' else 15,
-             mfc=vc.ESTACION if nombre != 'F' else vc.FUENTE, mec=vc.TINTA, mew=1.5)
+    marca, = axm.plot(pos[0]*dx*km, pos[1]*dy*km, 'o' if nombre != 'F' else '*', ms=11 if nombre != 'F' else 15,
+                      mfc=vc.ESTACION if nombre != 'F' else vc.FUENTE, mec=vc.TINTA, mew=1.5)
     axm.annotate(nombre, (pos[0]*dx*km, pos[1]*dy*km), xytext=(7, 8), textcoords='offset points', fontsize=11, color=vc.TINTA, weight='bold')
     axm.set_xlim(0, CF.nx*dx*km)
     axm.set_ylim(0, CF.ny*dy*km)
@@ -126,7 +136,11 @@ def animar_estacion(nombre, vx, vy, carpeta_salida, componente, paso, fps, venta
         cur_s.set_xdata([tc, tc])
         visible = np.where(ts[None, :] <= tc, db, np.nan)
         imagen.set_data(visible)
-        titulo.set_text('%s   ·   sismograma y espectrograma (%s)   ·   t = %5.2f s' % (nombre_largo, componente, tc))
+        est = 0 if nombre == 'F' else vc.estado_estacion(nombre, tc)
+        if nombre != 'F':
+            marca.set_markerfacecolor((vc.ESTACION, vc.COLOR_P, vc.COLOR_S)[est])
+        estado = ('', '   ·   llegó la onda P', '   ·   llegó la onda S')[est]
+        titulo.set_text('%s   ·   sismograma y espectrograma (%s)   ·   t = %5.2f s%s' % (nombre_largo, componente, tc, estado))
         return imagen, titulo
 
     if formato == 'mp4' and not shutil.which('ffmpeg'):

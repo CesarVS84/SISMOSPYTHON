@@ -1,4 +1,5 @@
-"""La fuente conserva la forma del original y su espectro cae a -40 dB a 8 Hz."""
+"""La fuente conserva la forma del original y su espectro cae a CF.NIVEL_FUENTE_DB a 8 Hz."""
+import CF
 import numpy as np
 import fuente
 
@@ -14,15 +15,15 @@ def test_misma_forma_que_el_original():
     assert abs(fuente.r(np.linspace(0, 10, 100000)).max() - r_original(np.linspace(0, 10, 100000)).max()) < 5e-3
 
 
-def test_espectro_menos_40_db_a_8_hz():
+def test_espectro_cae_al_nivel_a_8_hz():
     dt = 0.001
     t = np.arange(0, 80, dt)
     p = fuente.r(t)
     P = np.abs(np.fft.rfft(p))
     f = np.fft.rfftfreq(len(t), dt)
     nivel = 20*np.log10(P/P.max())
-    assert nivel[np.argmin(abs(f-8.))] < -39.5
-    assert f[np.argmax(nivel <= -40)] <= 8.1
+    assert abs(nivel[np.argmin(abs(f-CF.FMAX_FUENTE))] - CF.NIVEL_FUENTE_DB) < 0.6
+    assert f[np.argmax(nivel <= CF.NIVEL_FUENTE_DB)] <= CF.FMAX_FUENTE + 0.1
     # y el original tenía mucho más contenido a 8 Hz
     po = np.abs(np.fft.rfft(r_original(t)))
-    assert 20*np.log10(po[np.argmin(abs(f-8.))]/po.max()) > -20
+    assert 20*np.log10(po[np.argmin(abs(f-8.))]/po.max()) > CF.NIVEL_FUENTE_DB + 3

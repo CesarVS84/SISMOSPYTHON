@@ -5,7 +5,9 @@ animacion.py: animaciones de la onda sísmica sobre el modelo.
 A la izquierda, el campo de velocidad con la topografía, el aire, la capa CPML, las
 estaciones y la fuente. A la derecha, dos sismogramas con un cursor en el tiempo actual:
 el de la estación de la superficie más cercana a la fuente y el de la fuente (para ver el
-pulso). Cada animación muestra una sola magnitud: vx, vy o el módulo |v|.
+pulso). Cada animación muestra una sola magnitud: vx, vy o el módulo |v|. Las estaciones cambian de
+color cuando llegan la onda P (naranja) y la S (magenta), con los tiempos teóricos
+distancia/vp y distancia/vs (línea recta); esas llegadas se marcan también en el sismograma.
 
 Usa las instantáneas que guarda CPML.py (una cada CF.SNAPSHOT_CADA = 0.01 s) y genera MP4
 (si hay ffmpeg) o GIF. La escala de colores es fija en toda la animación.
@@ -23,6 +25,7 @@ Opciones:
                  20 cuadros por segundo el video va en tiempo real)
     --fps        cuadros por segundo (por defecto 20)
     --tmax       tiempo final (s); por defecto, todo
+    --ventana-sismograma  tiempo máximo (s) que muestran los sismogramas (por defecto 8; use 15 para todo)
     --dpi        resolución (por defecto 90)
     --formato    mp4 (por defecto, si hay ffmpeg) | gif
     --escala     raiz (realza las ondas débiles; por defecto) | lineal
@@ -61,7 +64,7 @@ def _panel_sismograma(ax, t, y, nombre, componente, color):
     return pasado, punto, cursor
 
 
-def crear_animacion(carpeta, campo, salida, paso, fps, tmax, dpi, gamma, formato):
+def crear_animacion(carpeta, campo, salida, paso, fps, tmax, dpi, gamma, formato, ventana_sism=8.0):
     disp = vc.instantaneas_disponibles(carpeta)
     if tmax is not None:
         disp = [d for d in disp if d[0] <= tmax]
@@ -85,15 +88,22 @@ def crear_animacion(carpeta, campo, salida, paso, fps, tmax, dpi, gamma, formato
     _, con_signo, etiqueta = vc.campo_derivado(vx, vy, campo)
 
     fig = plt.figure(figsize=(14.5, 7.6))
-    gs = fig.add_gridspec(2, 2, width_ratios=[1.0, 0.58], hspace=0.38, wspace=0.34, left=0.05, right=0.985, top=0.9, bottom=0.12)
+    gs = fig.add_gridspec(2, 2, width_ratios=[1.0, 0.58], hspace=0.38, wspace=0.34, left=0.05, right=0.985, top=0.9, bottom=0.14)
     ax = fig.add_subplot(gs[:, 0])
     ax1 = fig.add_subplot(gs[0, 1])
     ax2 = fig.add_subplot(gs[1, 1], sharex=ax1)
     valores0 = vc.campo_derivado(*vc.cargar_campo(carpeta, disp[0][1]), campo)[0]
-    im = vc.dibujar_mapa(ax, valores0, vmax, gamma, con_signo, titulo='', estaciones=True)
+    im = vc.dibujar_mapa(ax, valores0, vmax, gamma, con_signo, titulo='', estaciones=True, t=disp[0][0])
     vc.barra_color(fig, im, ax, vmax, gamma, con_signo, etiqueta)
-    vc.leyenda_modelo(fig, y=0.005)
+    vc.leyenda_modelo(fig, y=-0.01)
     paneles = [_panel_sismograma(a, te, s[0], s[1], campo, s[2]) for a, s in zip((ax1, ax2), series)]
+    # llegadas teóricas de P y S a la estación del primer panel
+    tp, ts = vc.tiempos_llegada(cercana)
+    for tt, lab, col in ((tp, 'P', vc.COLOR_P), (ts, 'S', vc.COLOR_S)):
+        ax1.axvline(tt, color=col, lw=1.4, ls=(0, (4, 2)), zorder=2)
+        ax1.annotate(lab, (tt, 1.0), xycoords=('data', 'axes fraction'), xytext=(-11 if lab == 'P' else 4, -13),
+                     textcoords='offset points', color=col, fontsize=10, weight='bold')
+    ax1.set_xlim(0, ventana_sism)
     ax2.set_xlabel('tiempo (s)', color=vc.TINTA_SUAVE)
     plt.setp(ax1.get_xticklabels(), visible=False)
     titulo = fig.suptitle('', fontsize=14, color=vc.TINTA, x=0.01, ha='left')
@@ -102,6 +112,7 @@ def crear_animacion(carpeta, campo, salida, paso, fps, tmax, dpi, gamma, formato
         t, ident = disp[k]
         vx, vy = vc.cargar_campo(carpeta, ident)
         im.set_data(vc.escala_campo(vc.campo_derivado(vx, vy, campo)[0], vmax, gamma, con_signo))
+        vc.actualizar_marcas(ax, t)
         titulo.set_text('Onda sísmica: %s    t = %5.2f s' % (ETIQUETA[campo], t))
         n = int(np.searchsorted(te, t + 1e-9))
         for (pasado, punto, cursor), (y, _, _) in zip(paneles, series):
@@ -130,12 +141,13 @@ def main():
     p.add_argument('--fps', type=int, default=20)
     p.add_argument('--tmax', type=float, default=None)
     p.add_argument('--dpi', type=int, default=90)
+    p.add_argument('--ventana-sismograma', type=float, default=8.0)
     p.add_argument('--formato', choices=['mp4', 'gif'], default='mp4')
     p.add_argument('--escala', choices=['raiz', 'lineal'], default='raiz')
     a = p.parse_args()
     salida = a.salida or os.path.join(a.carpeta, 'onda')
     for campo in (['vx', 'vy', 'modulo'] if a.campo == 'todos' else [a.campo]):
-        crear_animacion(a.carpeta, campo, salida, a.paso, a.fps, a.tmax, a.dpi, 0.5 if a.escala == 'raiz' else 1.0, a.formato)
+        crear_animacion(a.carpeta, campo, salida, a.paso, a.fps, a.tmax, a.dpi, 0.5 if a.escala == 'raiz' else 1.0, a.formato, a.ventana_sismograma)
 
 
 if __name__ == '__main__':

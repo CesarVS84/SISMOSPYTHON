@@ -42,10 +42,10 @@ def figura(carpeta, t, campo='todos', escala='raiz', estaciones=True):
     fig, axes = plt.subplots(1, n, figsize=(6.4*n+0.8, 6.9), squeeze=False, constrained_layout=True)
     for ax, (valores, con_signo, etiqueta) in zip(axes[0], datos):
         vmax = vmax_comp if con_signo else vc.vmax_robusto([valores])
-        im = vc.dibujar_mapa(ax, valores, vmax, gamma, con_signo, titulo=etiqueta.split(' ')[0], estaciones=estaciones)
+        im = vc.dibujar_mapa(ax, valores, vmax, gamma, con_signo, titulo=etiqueta.split(' ')[0], estaciones=estaciones, t=ti)
         vc.barra_color(fig, im, ax, vmax, gamma, con_signo, etiqueta)
     fig.suptitle('Onda sísmica en t = %.2f s' % ti, fontsize=14, color=vc.TINTA, x=0.01, ha='left')
-    vc.leyenda_modelo(fig, y=-0.045)
+    vc.leyenda_modelo(fig, y=-0.075)
     return fig, ti
 
 

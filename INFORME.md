@@ -136,12 +136,19 @@ iguales no escala linealmente.
 ## 4. Fuente de 8 Hz
 
 `codigos_sugeridos/fuente.py`: misma forma
-`w(exp(-a1 t) - exp(-a2 t))` y mismo máximo (9.245); solo cambia la escala de tiempo
-(`h = 1.01` en vez de 5). Se define "frecuencia máxima" como la que cae 40 dB
-(1 % de amplitud) respecto del máximo del espectro; comprobado con FFT: −40.0 dB a
-8 Hz (el original: −14 dB a 8 Hz y −40 dB recién a 40 Hz). Se cambia en
-`CF.FMAX_FUENTE` y `CF.NIVEL_FUENTE_DB`. Con 8 Hz la malla da 8.2 puntos por longitud
-de onda S.
+`w(exp(-a1 t) - exp(-a2 t))` y mismo máximo (9.245); solo cambia la escala de tiempo.
+"Frecuencia máxima" = la frecuencia a la que el espectro cae `CF.NIVEL_FUENTE_DB`
+respecto de su máximo. Con el valor por defecto **−20 dB a 8 Hz** (`h = 3.351`), comprobado
+con FFT. Con −40 dB (versión anterior, `h = 1.01`) el pulso quedaba tan largo y suave que
+las ondas P y S se fundían y los sismogramas se veían planos; con −20 dB P y S se separan
+y aparece coda. Ajustable en `CF.FMAX_FUENTE` y `CF.NIVEL_FUENTE_DB` (−40, −30, −20 y
+−12 medidos): menos negativo = pulso más corto y sismogramas más "sísmicos", pero más
+energía sobre 8 Hz (más dispersión numérica). Con 8 Hz la malla da 8.2 puntos por
+longitud de onda S.
+
+Animaciones: las estaciones cambian de color a la llegada teórica de la onda P
+(`r/vp`, naranja) y de la S (`r/vs`, magenta), y esas llegadas se marcan en los
+sismogramas. `animacion.py --ventana-sismograma S` limita la ventana de tiempo mostrada.
 
 ## 5. Decisiones que necesito de ti
 

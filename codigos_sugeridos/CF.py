@@ -58,9 +58,12 @@ courant = vp*dt/min(dx, dy)
 #Frecuencia máxima de la fuente. La forma temporal es la misma del programa
 #original (diferencia de dos exponenciales); ver fuente.py.
 FMAX_FUENTE = 8.0
-#Nivel (dB, respecto del máximo del espectro) a partir del cual se considera
-#que ya no hay energía a frecuencias mayores que FMAX_FUENTE.
-NIVEL_FUENTE_DB = -40.0
+#Nivel (dB, respecto del máximo del espectro) al que cae el espectro a FMAX_FUENTE.
+#-20 dB = a 8 Hz queda el 10 % de la amplitud (1 % de la energía). Con -40 dB el pulso
+#es tan lento (~2 s) que las ondas P y S se funden en una sola onda suave y el
+#sismograma se ve plano, sin coda; con -20 dB se separan y aparece la coda.
+#Opciones medidas: -40 (muy suave), -30, -20 (por defecto), -12 (más contenido sobre 8 Hz).
+NIVEL_FUENTE_DB = -20.0
 #Ancho (desviación estándar, en nodos) de la gaussiana en que se reparte la velocidad
 #impuesta en cada nodo de la fuente (F = 50 y F = 90). Con None se impone solo en los
 #nodos F, como en el programa original; eso deja los nodos fijos en cero después del
