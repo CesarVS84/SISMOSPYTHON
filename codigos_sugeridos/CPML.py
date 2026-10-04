@@ -219,7 +219,7 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
             theta=np.radians(CF.thetag), P=(CF.pml_points_x1, CF.pml_points_x2,
                                             CF.pml_points_y1, CF.pml_points_y2),
             usar_jih=CF.USAR_JIH, carpeta=None, instantaneas=INSTANTANEAS,
-            esfuerzo_inicial=None, verbose=True, registrar_campo=None, fuente_sigma=None):
+            esfuerzo_inicial=None, verbose=True, registrar_campo=None, fuente_sigma=None, guardar_cada=None):
     """Avanza nt pasos de tiempo.
 
     modelo : dict con aa (nx*ny), lambdaa, mu (celdas), F (nx, ny) y, si usar_jih,
@@ -230,6 +230,9 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     fuente_sigma : si es un número (nodos), las velocidades fuente_r(t) se reparten en una
                    gaussiana alrededor de cada nodo F (fuente suave); si es None, se imponen
                    solo en los nodos F (como en el programa original). Ver CF.FUENTE_SIGMA.
+    guardar_cada : si es un número (segundos) y hay carpeta, guarda vx y vy cada ese tiempo en
+                   carpeta/campo_vx.npy, campo_vy.npy (n, ny, nx) y tiempos.npy, a medida que
+                   avanza la simulación (sin acumularlos en memoria).
     Devuelve el registro de velocidad de las estaciones, [estación, paso, (vx, vy)]."""
     P1, P2, Q1, Q2 = P
     nn = nx*ny
@@ -268,6 +271,13 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     if carpeta is not None and instantaneas is not None:
         paso_guardado = {int(round(tg/dt)): suf for tg, suf in instantaneas if tg <= nt*dt + 1e-9}
     tipo = np.float32 if CF.SNAPSHOT_FLOAT32 else np.float64
+    campos = None
+    if carpeta is not None and guardar_cada:
+        cada = max(1, int(round(guardar_cada/dt)))
+        pasos_campo = np.arange(0, nt+1, cada)
+        campos = [np.lib.format.open_memmap(os.path.join(carpeta, nombre), mode='w+', dtype=np.float32,
+                                            shape=(len(pasos_campo), ny, nx)) for nombre in ('campo_vx.npy', 'campo_vy.npy')]
+        np.save(os.path.join(carpeta, 'tiempos.npy'), pasos_campo*dt)
 
     def guardar(sufijo, vxs, vys):
         np.save(os.path.join(carpeta, 'vyt'+sufijo), vys.astype(tipo))
@@ -316,10 +326,15 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
         Unewx += vx_n*dt
         Unewy += vy_n*dt
 
+        if campos is not None and n % cada == 0:
+            k = n//cada
+            campos[0][k] = vx_n.reshape(ny, nx)
+            campos[1][k] = vy_n.reshape(ny, nx)
         if n in paso_guardado:
             guardar(paso_guardado[n], vx_n, vy_n)
         if carpeta is not None and n == nt:
-            guardar('fin', vx_n, vy_n)
+            if instantaneas is not None:
+                guardar('fin', vx_n, vy_n)
             np.save(os.path.join(carpeta, 'Dfin'), Unewx.astype(tipo))
             np.save(os.path.join(carpeta, 'Dfiny'), Unewy.astype(tipo))
 
@@ -335,6 +350,9 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
         mv, mv_o = mv_o, mv
         ms, ms_o = ms_o, ms
 
+    if campos is not None:
+        for m in campos:
+            m.flush()
     if verbose:
         print('Simulación terminada en %.1f s (%.2f ms por paso)' % (time.time()-t_inicio, 1e3*(time.time()-t_inicio)/(nt+1)))
     return registro
@@ -376,7 +394,8 @@ def main(rapido=False, carpeta='salida'):
 
     nt = 300 if rapido else CF.nt
     registro = simular(modelo, perfiles, fuente.r, estaciones, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
-                       esfuerzo_inicial=esf, instantaneas=None if rapido else INSTANTANEAS)
+                       esfuerzo_inicial=esf, guardar_cada=CF.SNAPSHOT_CADA,
+                       instantaneas=INSTANTANEAS if (CF.GUARDAR_INSTANTANEAS_ANTIGUAS and not rapido) else None)
     guardar_estaciones(registro, carpeta)
     print('Resultados en la carpeta:', os.path.abspath(carpeta))
     return registro

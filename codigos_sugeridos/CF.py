@@ -36,10 +36,10 @@ yy = np.linspace(0, Ly, ny+1)
 
 #Temporal
 # El esquema es estable para vp*dt/min(dx,dy) <= 1 (verificado numéricamente).
-# Con una fuente de hasta 8 Hz basta un paso mucho mayor que 0.001: dt = 0.004
-# (número de Courant ~0.45) reduce a la mitad el número de pasos del programa
-# original (dt = 0.002) con la misma precisión temporal.
-nt = 3750
+# Con una fuente de hasta 8 Hz basta un paso mucho mayor que 0.001: dt = 0.005
+# (número de Courant 0.57) usa 2.5 veces menos pasos que el programa original (dt = 0.002)
+# y permite guardar el campo cada 0.01 s (= 2 pasos).
+nt = 3000
 T = np.linspace(0, tfin, nt+1)
 dt = tfin/nt
 
@@ -98,9 +98,15 @@ vel_damping = damp
 USAR_JIH = False
 
 # ------------------------------------------------------------- Instantáneas
-SNAPSHOT_CADA = 0.1       # segundos entre instantáneas
-GUARDAR_ESFUERZOS = True  # además de vx, vy se guardan Sbxx, Sbyy, Sbxy
-SNAPSHOT_FLOAT32 = True   # guarda en simple precisión (la mitad de espacio)
+# Campos completos: se guardan vx y vy cada SNAPSHOT_CADA segundos en dos archivos,
+# salida/campo_vx.npy y salida/campo_vy.npy, de forma (n_instantáneas, ny, nx) en simple
+# precisión, junto con salida/tiempos.npy. Con 0.01 s y 15 s son 1501 instantáneas, 1.5 GB
+# por campo (3 GB en total). Con 0.05 s serían 0.6 GB. None desactiva el guardado.
+SNAPSHOT_CADA = 0.01
+# Formato antiguo (un archivo por instantánea, nombres sxxt..., vxt..., cada 0.1 s)
+GUARDAR_INSTANTANEAS_ANTIGUAS = False
+GUARDAR_ESFUERZOS = True  # (solo formato antiguo) además de vx, vy se guardan Sbxx, Sbyy, Sbxy
+SNAPSHOT_FLOAT32 = True   # (solo formato antiguo) guarda en simple precisión
 
 # ------------------------------------------------------------------ Hilos
 #MacBook Air M4: 10 hilos

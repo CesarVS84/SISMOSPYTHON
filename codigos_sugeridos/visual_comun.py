@@ -32,6 +32,57 @@ CMAP_MODULO = 'viridis'         # secuencial: de menor a mayor módulo
 NOMBRES_ESTACIONES = ['E1', 'E2', 'E3', 'E4', 'E5', 'E6', 'E7', 'E8', 'E9']
 
 
+def posiciones_estaciones():
+    """{nombre: (i, j)} de las estaciones y de la fuente 'F'."""
+    d = {NOMBRES_ESTACIONES[k]: tuple(p) for k, p in enumerate(TOP.estaciones)}
+    d['F'] = tuple(TOP.sour1)
+    return d
+
+
+def estacion_superficie_mas_cercana():
+    """Nombre de la estación sobre la superficie libre más cercana a la fuente."""
+    js = superficie()
+    fi, fj = TOP.sour1
+    mejor, dmin = None, np.inf
+    for k, (i, j) in enumerate(TOP.estaciones):
+        if j == js[i]:                                  # solo estaciones en la superficie
+            d = np.hypot(i-fi, j-fj)
+            if d < dmin:
+                mejor, dmin = NOMBRES_ESTACIONES[k], d
+    return mejor
+
+
+def serie(vx, vy, componente):
+    """Serie temporal de 'vx', 'vy' o 'modulo'."""
+    if componente == 'vx':
+        return vx
+    if componente == 'vy':
+        return vy
+    return np.hypot(vx, vy)
+
+
+def stft(x, dt, ventana, solape):
+    """STFT con ventana de Hann. Devuelve (t centro de cada ventana, f, |X|)."""
+    nv = int(round(ventana/dt))
+    salto = max(1, int(round(nv*(1-solape))))
+    w = np.hanning(nv)
+    x = x - x.mean()
+    pos = np.arange(0, len(x)-nv+1, salto)
+    nfft = 1 << int(np.ceil(np.log2(4*nv)))              # relleno con ceros: curvas más suaves
+    X = np.array([np.abs(np.fft.rfft(w*x[p:p+nv], nfft)) for p in pos]).T
+    f = np.fft.rfftfreq(nfft, dt)
+    return (pos + nv/2)*dt, f, X/w.sum()*2
+
+
+def espectrograma_db(x, dt, ventana=2.0, solape=0.9, fmax=16., rango_db=50., ref=None):
+    """Espectrograma en dB respecto de su máximo (o de ref). Devuelve (t, f, dB) con f <= fmax."""
+    t, f, X = stft(x, dt, ventana, solape)
+    ref = X.max() if ref is None else ref
+    db = 20*np.log10(np.maximum(X, 1e-30)/ref)
+    sel = f <= fmax
+    return t, f[sel], np.maximum(db[sel], -rango_db)
+
+
 def superficie():
     """Fila de la superficie en cada columna."""
     if hasattr(TOP, 'js'):
@@ -39,8 +90,27 @@ def superficie():
     return np.asarray(TOP.hc).astype(int)[:CF.nx]
 
 
+_MMAP = {}
+
+
+def _campos_mmap(carpeta):
+    """(vx, vy, tiempos) del formato nuevo (campo_vx.npy, campo_vy.npy, tiempos.npy) o None."""
+    if carpeta not in _MMAP:
+        a = os.path.join(carpeta, 'campo_vx.npy')
+        if os.path.exists(a):
+            _MMAP[carpeta] = (np.load(a, mmap_mode='r'), np.load(os.path.join(carpeta, 'campo_vy.npy'), mmap_mode='r'),
+                              np.load(os.path.join(carpeta, 'tiempos.npy')))
+        else:
+            _MMAP[carpeta] = None
+    return _MMAP[carpeta]
+
+
 def instantaneas_disponibles(carpeta):
-    """Lista [(tiempo, sufijo)] de las instantáneas que existen en la carpeta."""
+    """Lista [(tiempo, id)] de las instantáneas. id es el número de instantánea (formato
+    nuevo, cada CF.SNAPSHOT_CADA s) o el sufijo del nombre del archivo (formato antiguo)."""
+    nuevo = _campos_mmap(carpeta)
+    if nuevo is not None:
+        return [(float(t), k) for k, t in enumerate(nuevo[2])]
     out = [(t, s) for t, s in INSTANTANEAS if os.path.exists(os.path.join(carpeta, 'vxt%s.npy' % s))]
     if os.path.exists(os.path.join(carpeta, 'vxtfin.npy')):
         out.append((CF.tfin, 'fin'))
@@ -49,10 +119,13 @@ def instantaneas_disponibles(carpeta):
     return sorted(out)
 
 
-def cargar_campo(carpeta, sufijo):
+def cargar_campo(carpeta, ident):
     """(vx, vy) como arreglos [j, i] (j hacia arriba)."""
-    vx = np.load(os.path.join(carpeta, 'vxt%s.npy' % sufijo)).astype(float).reshape(CF.ny, CF.nx)
-    vy = np.load(os.path.join(carpeta, 'vyt%s.npy' % sufijo)).astype(float).reshape(CF.ny, CF.nx)
+    nuevo = _campos_mmap(carpeta)
+    if nuevo is not None and isinstance(ident, (int, np.integer)):
+        return np.array(nuevo[0][ident], dtype=float), np.array(nuevo[1][ident], dtype=float)
+    vx = np.load(os.path.join(carpeta, 'vxt%s.npy' % ident)).astype(float).reshape(CF.ny, CF.nx)
+    vy = np.load(os.path.join(carpeta, 'vyt%s.npy' % ident)).astype(float).reshape(CF.ny, CF.nx)
     return vx, vy
 
 

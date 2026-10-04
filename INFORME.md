@@ -155,18 +155,26 @@ de onda S.
 
 ## 6. Visualización (`codigos_sugeridos/`)
 
-Se ejecutan después de `python CPML.py` y leen la carpeta `salida/`:
+Todo se ejecuta después de `python CPML.py` y lee la carpeta `salida/`. Requiere
+`matplotlib` (y `ffmpeg` para los MP4); no usa `scipy`.
 
-* `graficas.py --t 3.5`: mapa de la onda en ese tiempo (vx, vy y |v|) sobre la
-  topografía, con el aire, la capa CPML y las estaciones E1–E9 y la fuente F.
-  Puede dibujar varios tiempos (`--t 2 4 6`) o un solo campo (`--campo vy`).
-* `espectrograma.py`: espectrograma (STFT, ventana de Hann) de cada estación y una
-  segunda figura con su espectro de amplitud, con la línea de 8 Hz.
-* `animacion.py`: video MP4 (o GIF si no hay ffmpeg) con todas las instantáneas y
-  escala de color fija.
-* `visual_comun.py`: funciones compartidas (lectura de resultados y dibujo del modelo).
+**Datos guardados.** Con `CF.SNAPSHOT_CADA = 0.01` el programa guarda vx y vy cada 0.01 s
+mientras corre, en `salida/campo_vx.npy` y `salida/campo_vy.npy` (forma
+`(1501, 500, 500)`, simple precisión, 1.5 GB cada uno) y `salida/tiempos.npy`. Para eso
+`dt` pasó a 0.005 (Courant 0.57; 0.01 s son 2 pasos). Las estaciones se registran en cada
+paso. La simulación completa de 15 s, escribiendo los 3 GB, tomó 43 s con 4 hilos.
+Para menos disco, suba `SNAPSHOT_CADA` (con 0.05 s son 0.6 GB) o ponga `None`.
 
-Requieren `matplotlib` (y `ffmpeg` para MP4); no usan `scipy`. Se probaron con una
-simulación completa de 15 s del volcán sintético. En los espectrogramas casi toda la
-energía queda bajo 1 Hz; por encima de 8 Hz queda un piso de unos −45 a −50 dB, que es
-la fuente (−40 dB a 8 Hz) más ruido numérico de la malla.
+| Script | Qué genera |
+|---|---|
+| `graficas.py --t 3.5` | mapa de vx, vy y \|v\| en ese tiempo, con topografía, aire, capa CPML y estaciones |
+| `animacion.py` | tres videos separados (`onda_vx`, `onda_vy`, `onda_modulo`): mapa a la izquierda y, a la derecha, el sismograma de la estación de superficie más cercana a la fuente y el de la fuente (pulso), con cursor |
+| `sismograma_espectrograma.py` | una figura por estación (sismograma vx, vy y espectrograma) y `resumen_estaciones.png` con todas |
+| `animacion_estacion.py` | un video por estación y uno para la fuente, con el sismograma y el espectrograma construyéndose en el tiempo y la posición de la estación |
+| `espectrograma.py` | rejilla de espectrogramas de todas las estaciones y sus espectros de amplitud |
+| `visual_comun.py` | funciones compartidas (lectura, STFT, dibujo del modelo) |
+
+`animacion.py` usa por defecto una instantánea de cada 5 (0.05 s) a 20 cuadros por
+segundo, es decir, el video va en tiempo real (15 s). En el volcán sintético E3 y E4 están
+a igual distancia de la fuente; se elige la primera. Con la topografía real se calcula con
+las estaciones de `TOP.estaciones` que están sobre la superficie.

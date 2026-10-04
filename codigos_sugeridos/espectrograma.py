@@ -34,26 +34,8 @@ import CF
 import visual_comun as vc
 
 
-def stft(x, dt, ventana, solape):
-    """STFT con ventana de Hann. Devuelve (t centro de cada ventana, f, |X|)."""
-    nv = int(round(ventana/dt))
-    salto = max(1, int(round(nv*(1-solape))))
-    w = np.hanning(nv)
-    x = x - x.mean()
-    pos = np.arange(0, len(x)-nv+1, salto)
-    nfft = 1 << int(np.ceil(np.log2(4*nv)))              # relleno con ceros: curvas más suaves
-    X = np.array([np.abs(np.fft.rfft(w*x[p:p+nv], nfft)) for p in pos]).T
-    f = np.fft.rfftfreq(nfft, dt)
-    t = (pos + nv/2)*dt
-    return t, f, X/ w.sum()*2
-
-
-def serie(vx, vy, componente):
-    if componente == 'vx':
-        return vx
-    if componente == 'vy':
-        return vy
-    return np.hypot(vx, vy)
+stft = vc.stft
+serie = vc.serie
 
 
 def figura_espectrogramas(nombres, vx, vy, componente, ventana, solape, fmax, rango_db, normalizar):
