@@ -63,7 +63,7 @@ def distancia_a_la_fuente(nombre):
 
 def tiempos_llegada(nombre):
     """(t_P, t_S) teóricos en s: distancia en línea recta / vp y / vs. Para la fuente (F)
-    la distancia es cero. No incluyen el retraso del pulso (su máximo está en ~0.2 s)."""
+    la distancia es cero. No incluyen el retraso de la fuente (la tasa de momento tiene su máximo en ~0.3 s)."""
     r = distancia_a_la_fuente(nombre)
     return r/CF.vp, r/CF.vs
 

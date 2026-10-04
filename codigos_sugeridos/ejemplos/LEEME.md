@@ -4,7 +4,7 @@ Generados con `codigos_sugeridos` sobre el **volcán sintético** (no con tu `sn
 completa de 15 s, campos guardados cada 0.01 s.
 
 * `onda_vx.mp4`, `onda_vy.mp4`, `onda_modulo.mp4`: animación del campo con el sismograma de la estación
-  de superficie más cercana a la fuente (E3) y el de la fuente.
+  de superficie más cercana a la fuente (E3) y el del nodo junto a la fuente. Fuente: doble cupla (tensor de momento), ver INFORME.md §4.
 * `animaciones_estaciones/estacion_*.mp4`: sismograma y espectrograma por estación (E1–E9) y fuente (F).
 * `figuras/estacion_*.png`, `figuras/resumen_estaciones.png`: sismograma + espectrograma.
 

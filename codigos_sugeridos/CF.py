@@ -70,16 +70,25 @@ NIVEL_FUENTE_DB = -20.0
 #pulso (un obstáculo rígido) y excita ondas de 2 a 4 nodos de largo que la CPML no
 #absorbe: el eco medido con la capa sube de -66 dB a -23 dB.
 FUENTE_SIGMA = 1.5
-#Tipo de fuente: 'sismo' = ruptura de duración finita (un evento principal seguido de
-#subeventos, ver fuente.sismo); 'pulso' = un solo pulso (la fuente original). Con un solo
-#pulso el sismograma muestra apenas el pulso viajando y rebotando en la topografía; un
-#sismo real es un tren de ondas de varios segundos.
-TIPO_FUENTE = 'sismo'
-SISMO_DURACION = 5.0     #s: duración de la ruptura (hasta el último subevento)
-SISMO_N = 80             #número de subeventos después del evento principal
-SISMO_TAU = 1.8          #s: decaimiento de la amplitud de los subeventos (tipo Omori/coda)
+#Tipo de fuente:
+#  'momento'         (por defecto) doble cupla en el plano: tensor de momento M(t) inyectado
+#                    como esfuerzo en la celda de la fuente, con una tasa de momento suave
+#                    (gaussiana, más subeventos). Es la forma física de una falla: la onda
+#                    radiada es bipolar y no deja desplazamiento permanente. Ver fuente.py.
+#  'velocidad_pulso' fuente original: un solo pulso de velocidad impuesta.
+TIPO_FUENTE = 'momento'
+#Momento sísmico por unidad de longitud (N, el problema es 2-D). Fija la amplitud de las
+#velocidades: con 1e12 N las velocidades a unos km son del orden de cm/s a dm/s.
+M0 = 1.0e12
+#Ruptura con subeventos (todos del mismo mecanismo, momento total M0): el evento principal
+#en t = 0 y SISMO_N subeventos más débiles en los siguientes SISMO_DURACION segundos, con
+#amplitud que decae como exp(-t/SISMO_TAU). SISMO_N = 0 da un único evento.
+SISMO_DURACION = 1.2     #s: duración de la ruptura (hasta el último subevento)
+SISMO_N = 12             #número de subeventos después del evento principal
+SISMO_TAU = 0.6          #s: decaimiento de la amplitud de los subeventos
 SISMO_SEMILLA = 7        #semilla del generador (el mismo sismo en cada ejecución)
-#Ángulo de la dirección de apertura de la fuente respecto del eje x (grados)
+#Ángulo del plano de falla respecto del eje x (grados); con 'momento' define el tensor
+#de la doble cupla, y con las fuentes de velocidad la dirección de apertura
 thetag = 30.
 
 # --------------------------------------------------------------- Absorbente

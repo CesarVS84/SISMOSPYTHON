@@ -1,8 +1,12 @@
 # -*- coding: utf-8 -*-
 """
-fuente.py: función temporal de la fuente.
+fuente.py: funciones temporales de la fuente.
 
-Misma forma que en el programa original:
+Fuente por defecto (CF.TIPO_FUENTE = 'momento'): doble cupla con tasa de momento
+gaussiana; ver más abajo (tasa_momento, tensor_unitario, sigma_gauss_para_fmax).
+
+Fuente de velocidad impuesta (CF.TIPO_FUENTE = 'velocidad_pulso'), la del programa
+original, con la misma forma:
 
     r(t) = w * ( exp(-(1-sqrt(z))/2 * H*t) - exp(-(1+sqrt(z))/2 * H*t) ),   H = 10*h
 
@@ -76,45 +80,77 @@ def o(t):
     return _forma(t, h3)
 
 
+def fuente_activa():
+    """Función r(t) de la fuente de velocidad impuesta (solo con CF.TIPO_FUENTE = 'velocidad_pulso')."""
+    return r
+
+
+# ---------------------------------------------------------------------------
+#  Fuente de momento (doble cupla): CF.TIPO_FUENTE = 'momento'
+# ---------------------------------------------------------------------------
+#
+#  Una falla se representa con un tensor de momento M_ij(t) = M0 * m_ij * S(t), con S(t)
+#  creciente de 0 a 1 (la falla se desliza) y m_ij el tensor unitario de la doble cupla.
+#  En el esquema de velocidad-esfuerzo se inyecta como una tasa de esfuerzo en la celda de
+#  la fuente:  dS_ij/dt += -dM_ij/dt / (dx*dy)   (ver CPML.inyectar_momento).
+#
+#  La tasa de momento es una suma de gaussianas (el evento principal y subeventos de la
+#  ruptura). Una gaussiana tiene espectro gaussiano: sin lóbulos ni saltos, y la onda
+#  radiada (velocidad ~ derivada de la tasa de momento) es bipolar, sin desplazamiento
+#  permanente. Su ancho se calcula para que ESA onda radiada caiga NIVEL_FUENTE_DB a
+#  FMAX_FUENTE (el límite de 8 Hz se refiere a lo que registran las estaciones).
+
+def _nivel_velocidad(x):
+    """|V(f)|/|V|max de la velocidad radiada de una gaussiana, con x = f/f_pico:
+    V ~ f * exp(-(2 pi f sigma)^2 / 2), f_pico = 1/(2 pi sigma)."""
+    return x*np.exp((1-x**2)/2)
+
+
+def sigma_gauss_para_fmax(fmax=FMAX_FUENTE, nivel_db=NIVEL_FUENTE_DB):
+    """Desviación estándar sigma (s) de la gaussiana de la tasa de momento tal que la
+    velocidad radiada vale nivel_db (dB) respecto de su máximo a fmax."""
+    objetivo = 10**(nivel_db/20.)
+    lo, hi = 1., 50.                                # x > 1: rama decreciente
+    for _ in range(200):
+        medio = 0.5*(lo+hi)
+        if _nivel_velocidad(medio) > objetivo:
+            lo = medio
+        else:
+            hi = medio
+    x = 0.5*(lo+hi)
+    f_pico = fmax/x
+    return 1./(2*np.pi*f_pico)
+
+
 def _subeventos():
-    """Tiempos y amplitudes (con signo) de la ruptura: evento principal en t = 0 y luego
-    CF.SISMO_N subeventos con tiempos aleatorios en [0, SISMO_DURACION] (más densos al
-    inicio), amplitud que decae como exp(-t/SISMO_TAU) y signo aleatorio. Se normaliza para
-    que la energía espectral total sea la de un solo pulso: el contenido sobre 8 Hz es
-    el mismo que el del pulso."""
+    """Tiempos (s) y pesos de la ruptura: evento principal en 0 y CF.SISMO_N subeventos con
+    tiempo aleatorio en [0, SISMO_DURACION] (más densos al inicio) y amplitud exp(-t/SISMO_TAU).
+    Los pesos suman 1 (el momento total es CF.M0). Semilla fija."""
     g = np.random.default_rng(CF.SISMO_SEMILLA)
     t = np.sort(g.uniform(0, 1, CF.SISMO_N)**1.5*CF.SISMO_DURACION)
-    a = g.uniform(0.3, 1.0, CF.SISMO_N)*np.exp(-t/CF.SISMO_TAU)*g.choice([-1., 1.], CF.SISMO_N)
+    a = 0.6*g.uniform(0.3, 1.0, CF.SISMO_N)*np.exp(-t/CF.SISMO_TAU)
     t = np.concatenate([[0.], t])
-    a = np.concatenate([[1.], 0.55*a])          # el evento principal domina
-    return t, a/np.sqrt((a**2).sum())
+    a = np.concatenate([[1.], a])
+    return t, a/a.sum()
 
 
+sigma_t = sigma_gauss_para_fmax()
+t0 = 6*sigma_t                      # retraso para que la tasa de momento parta de ~0
 _t_sub, _a_sub = _subeventos()
 
 
-def sismo(t):
-    """Ruptura de duración finita: suma de pulsos r(t - t_k) con amplitud a_k."""
+def tasa_momento(t):
+    """dM0/dt (N/s) en el tiempo t: suma de gaussianas; integra a CF.M0."""
     t = np.asarray(t, dtype=float)
-    a1, a2 = _tasas(h1)
-    tau = t[..., None] - _t_sub
-    p = np.where(tau > 0, np.exp(-a1*np.maximum(tau, 0)) - np.exp(-a2*np.maximum(tau, 0)), 0.)
-    return _escala*w*(p*_a_sub).sum(axis=-1)
+    x = (t[..., None] - t0 - _t_sub)/sigma_t
+    return CF.M0*(_a_sub*np.exp(-0.5*x**2)).sum(axis=-1)/(sigma_t*np.sqrt(2*np.pi))
 
 
-def _calcular_escala():
-    # mismo valor máximo que el pulso original (9.245), para que la amplitud sea comparable
-    tt = np.arange(0, CF.SISMO_DURACION+3, 0.002)
-    return 9.2448/np.abs(sismo(tt)).max()
-
-
-_escala = 1.
-_escala = _calcular_escala()
-
-
-def fuente_activa():
-    """Función de la fuente según CF.TIPO_FUENTE."""
-    return sismo if CF.TIPO_FUENTE == 'sismo' else r
+def tensor_unitario(angulo_grados=None):
+    """(mxx, myy, mxy) de una doble cupla en el plano con el plano de falla a 'angulo' del eje x:
+    M = ŝ n̂ᵀ + n̂ ŝᵀ, con ŝ = (cos φ, sin φ) y n̂ = (-sin φ, cos φ)."""
+    phi = np.radians(CF.thetag if angulo_grados is None else angulo_grados)
+    return -np.sin(2*phi), np.sin(2*phi), np.cos(2*phi)
 
 
 def frecuencia_maxima(h, nivel_db=NIVEL_FUENTE_DB, fmax_busqueda=200.):

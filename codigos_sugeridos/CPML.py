@@ -168,6 +168,35 @@ def crear_fuente_suave(F, sigma, nx, ny):
     return idx, np.array([pesos[k] for k in idx])
 
 
+def crear_fuente_momento(F, b, sigma, nx, ny):
+    '''Celdas y pesos (suman 1) de la fuente de momento: una gaussiana de desviación sigma
+    (en celdas) centrada en el punto medio de los nodos de la fuente (F == 50 y F == 90).
+    Solo se usan celdas de roca (b > 0). Devuelve (índices de celda, pesos).'''
+    nodos = np.argwhere(np.asarray(F) > 0).astype(float)
+    ci, cj = nodos[:, 0].mean()+0.5, nodos[:, 1].mean()+0.5   # centro de celda = nodo + 1/2
+    R = int(np.ceil(4*sigma))
+    nc = nx-1
+    idx, pesos = [], []
+    for j in range(max(int(cj)-R, 0), min(int(cj)+R+1, ny-1)):
+        for i in range(max(int(ci)-R, 0), min(int(ci)+R+1, nx-1)):
+            if b[i+nc*j] > 0:
+                idx.append(i+nc*j)
+                pesos.append(np.exp(-((i+0.5-ci)**2+(j+0.5-cj)**2)/(2*sigma**2)))
+    pesos = np.array(pesos)
+    return np.array(idx, dtype=np.int64), pesos/pesos.sum()
+
+
+@njit(cache=True)
+def inyectar_momento(Sxx, Syy, Sxy, idx, peso, ex, ey, exy):
+    '''Suma la tasa de momento (ya multiplicada por dt/(dx*dy)) a los esfuerzos de las
+    celdas de la fuente: S_ij -= m_ij * Mdot*dt/(dx*dy) * peso.'''
+    for n in range(idx.shape[0]):
+        q = idx[n]
+        Sxx[q] -= peso[n]*ex
+        Syy[q] -= peso[n]*ey
+        Sxy[q] -= peso[n]*exy
+
+
 @njit(parallel=True, fastmath=True, nogil=True, cache=True)
 def construir_Sb(Sbxx, Sbyy, Sbxy, Sxx, Syy, Sxy, nx, ny):
     '''Esfuerzos con borde (nx+1)*(ny+1): Sb[i, j] = S[i-1, j-1]; contorno nulo.'''
@@ -219,7 +248,8 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
             theta=np.radians(CF.thetag), P=(CF.pml_points_x1, CF.pml_points_x2,
                                             CF.pml_points_y1, CF.pml_points_y2),
             usar_jih=CF.USAR_JIH, carpeta=None, instantaneas=INSTANTANEAS,
-            esfuerzo_inicial=None, verbose=True, registrar_campo=None, fuente_sigma=None, guardar_cada=None):
+            esfuerzo_inicial=None, verbose=True, registrar_campo=None, fuente_sigma=None, guardar_cada=None,
+            fuente_momento=None):
     """Avanza nt pasos de tiempo.
 
     modelo : dict con aa (nx*ny), lambdaa, mu (celdas), F (nx, ny) y, si usar_jih,
@@ -230,6 +260,10 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     fuente_sigma : si es un número (nodos), las velocidades fuente_r(t) se reparten en una
                    gaussiana alrededor de cada nodo F (fuente suave); si es None, se imponen
                    solo en los nodos F (como en el programa original). Ver CF.FUENTE_SIGMA.
+    fuente_momento : si no es None, (tasa, (mxx, myy, mxy)): fuente de momento (doble cupla).
+                   tasa(t) es dM0/dt (N/s) y el tensor unitario va en m_ij; se inyecta como
+                   esfuerzo en las celdas de la fuente (gaussiana de ancho fuente_sigma celdas)
+                   y fuente_r se ignora. Ver fuente.py.
     guardar_cada : si es un número (segundos) y hay carpeta, guarda vx y vy cada ese tiempo en
                    carpeta/campo_vx.npy, campo_vy.npy (n, ny, nx) y tiempos.npy, a medida que
                    avanza la simulación (sin acumularlos en memoria).
@@ -245,6 +279,14 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     fuente90 = np.argwhere(np.asarray(modelo['F']) == 90).astype(np.int64)
     if fuente_sigma:
         idx_fs, peso_fs = crear_fuente_suave(modelo['F'], fuente_sigma, nx, ny)
+
+    if fuente_momento is not None:
+        tasa_m, (mxx, myy, mxy) = fuente_momento
+        idx_m, peso_m = crear_fuente_momento(modelo['F'], b, fuente_sigma or 1.5, nx, ny)
+        if carpeta is not None:
+            os.makedirs(carpeta, exist_ok=True)
+            tt = np.arange(nt+1)*dt
+            np.save(os.path.join(carpeta, 'tasa_momento.npy'), np.array([tt, tasa_m(tt)]))
 
     vx, vy, vx_n, vy_n = (np.zeros(nn) for _ in range(4))
     Sxx, Sxy, Syy, Sxx_n, Sxy_n, Syy_n = (np.zeros(nc) for _ in range(6))
@@ -292,10 +334,13 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     for n in range(nt+1):
         t = n*dt
         # Fuente: se impone sobre las velocidades del paso anterior
-        rt = fuente_r(t)
-        if not fuente_sigma:
+        if fuente_momento is not None:
+            pass                         # la fuente de momento se inyecta en los esfuerzos
+        elif not fuente_sigma:
+            rt = fuente_r(t)
             aplicar_fuente(vx, vy, fuente50, fuente90, rt*np.cos(theta), rt*np.sin(theta), nx)
         else:
+            rt = fuente_r(t)
             # velocidad impuesta como en el original, pero repartida en una gaussiana
             asignar_fuente(vx, vy, idx_fs, peso_fs, rt*np.cos(theta), -rt*np.sin(theta))
 
@@ -322,6 +367,10 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
                       perfiles['a_x_half'], perfiles['b_x_half'], perfiles['k_x_half'],
                       perfiles['a_y_half'], perfiles['b_y_half'], perfiles['k_y_half'],
                       P1, P2, Q1, Q2, nx, ny)
+
+        if fuente_momento is not None:
+            e = tasa_m(t)*dt/(dx*dy)
+            inyectar_momento(Sxx_n, Syy_n, Sxy_n, idx_m, peso_m, mxx*e, myy*e, mxy*e)
 
         Unewx += vx_n*dt
         Unewy += vy_n*dt
@@ -375,8 +424,12 @@ def main(rapido=False, carpeta='salida'):
 
     CF.informe()
     print('Hilos de Numba:', config.NUMBA_NUM_THREADS, '(en uso:', min(CF.NUM_HILOS, config.NUMBA_NUM_THREADS), ')')
-    print('Fuente: h = %.3f, frecuencia máxima (%.0f dB) = %.2f Hz' % (
-        fuente.h1, CF.NIVEL_FUENTE_DB, fuente.frecuencia_maxima(fuente.h1)))
+    if CF.TIPO_FUENTE == 'momento':
+        print('Fuente: doble cupla, M0 = %.2e N/m, sigma_t = %.3f s (velocidad radiada a %.0f dB a %.0f Hz)' % (
+            CF.M0, fuente.sigma_t, CF.NIVEL_FUENTE_DB, CF.FMAX_FUENTE))
+    else:
+        print('Fuente: pulso de velocidad, h = %.3f, frecuencia máxima (%.0f dB) = %.2f Hz' % (
+            fuente.h1, CF.NIVEL_FUENTE_DB, fuente.frecuencia_maxima(fuente.h1)))
 
     assert CF.dx == CF.dy, 'El esquema supone dx == dy'
     # velocidad P máxima del modelo (para la CPML)
@@ -393,7 +446,10 @@ def main(rapido=False, carpeta='salida'):
         esf = ((CF.nx-1)*175 + 200, CF.six, CF.siy, CF.sixy)
 
     nt = 300 if rapido else CF.nt
-    registro = simular(modelo, perfiles, fuente.fuente_activa(), estaciones, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
+    momento = None
+    if CF.TIPO_FUENTE == 'momento':
+        momento = (fuente.tasa_momento, fuente.tensor_unitario())
+    registro = simular(modelo, perfiles, fuente.fuente_activa(), estaciones, fuente_momento=momento, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
                        esfuerzo_inicial=esf, guardar_cada=CF.SNAPSHOT_CADA,
                        instantaneas=INSTANTANEAS if (CF.GUARDAR_INSTANTANEAS_ANTIGUAS and not rapido) else None)
     guardar_estaciones(registro, carpeta)

@@ -4,8 +4,8 @@ animacion.py: animaciones de la onda sísmica sobre el modelo.
 
 A la izquierda, el campo de velocidad con la topografía, el aire, la capa CPML, las
 estaciones y la fuente. A la derecha, dos sismogramas con un cursor en el tiempo actual:
-el de la estación de la superficie más cercana a la fuente y el de la fuente (para ver el
-pulso). Cada animación muestra una sola magnitud: vx, vy o el módulo |v|. Las estaciones cambian de
+el de la estación de la superficie más cercana a la fuente y el del nodo junto a la fuente (velocidad
+cercana a la falla). Cada animación muestra una sola magnitud: vx, vy o el módulo |v|. Las estaciones cambian de
 color cuando llegan la onda P (naranja) y la S (magenta), con los tiempos teóricos
 distancia/vp y distancia/vs (línea recta); esas llegadas se marcan también en el sismograma.
 
@@ -75,7 +75,7 @@ def crear_animacion(carpeta, campo, salida, paso, fps, tmax, dpi, gamma, formato
     cercana = vc.estacion_superficie_mas_cercana()
     te = np.arange(evx.shape[1])*CF.tfin/(evx.shape[1]-1)
     trazas = [(cercana, 'Estación %s (superficie, la más cercana a la fuente)' % cercana, '#0b7285'),
-              ('F', 'Fuente (F): pulso impuesto', vc.FUENTE)]
+              ('F', 'Fuente (F): velocidad junto a la falla', vc.FUENTE)]
     series = [(vc.serie(evx[nombres.index(n)], evy[nombres.index(n)], campo), tit, col) for n, tit, col in trazas]
 
     # escala de color fija
