@@ -493,9 +493,39 @@ def aplicar_fuente(vx, vy, fuente50, fuente90, rc, rs, nx):
         vx[p] = -rc
         vy[p] = rs
 
+# Fuente suave. Con FUENTE_SIGMA = None la velocidad de la fuente se impone solo en los nodos
+# F == 50 y F == 90 (como en el original): esos nodos quedan fijos en cero después del pulso,
+# lo que actúa como un obstáculo rígido, y la fuente excita ondas de 2 a 4 nodos de largo que
+# la CPML no absorbe (medido: el eco con la capa sube de -66 dB a -23 dB). Con un número
+# (ancho en nodos), la velocidad se reparte en una gaussiana alrededor de cada nodo.
+FUENTE_SIGMA = 1.5
+
+def _pesos_fuente(sigma):
+    pesos = {}
+    R = int(np.ceil(4*sigma))
+    for valor, signo in ((50, 1.), (90, -1.)):
+        for i0, j0 in np.argwhere(np.asarray(F) == valor):
+            for j in range(max(j0-R, 1), min(j0+R+1, ny-1)):
+                for i in range(max(i0-R, 1), min(i0+R+1, nx-1)):
+                    pesos[i+nx*j] = pesos.get(i+nx*j, 0.) + signo*np.exp(-((i-i0)**2+(j-j0)**2)/(2*sigma**2))
+    idx = np.array(list(pesos.keys()), dtype=np.int64)
+    return idx, np.array([pesos[k] for k in idx])
+
+@njit(cache=True)
+def asignar_fuente(vx, vy, idx, peso, rc, rs):
+    for n in range(idx.shape[0]):
+        vx[idx[n]] = peso[n]*rc
+        vy[idx[n]] = -peso[n]*rs
+
+if FUENTE_SIGMA:
+    idx_fuente, peso_fuente = _pesos_fuente(FUENTE_SIGMA)
+
 def source(t):
     rt = r(t)
-    aplicar_fuente(vx, vy, fuente50, fuente90, rt*np.cos(theta), rt*np.sin(theta), nx)
+    if FUENTE_SIGMA:
+        asignar_fuente(vx, vy, idx_fuente, peso_fuente, rt*np.cos(theta), rt*np.sin(theta))
+    else:
+        aplicar_fuente(vx, vy, fuente50, fuente90, rt*np.cos(theta), rt*np.sin(theta), nx)
 
 
 # Instantáneas: (tiempo, sufijo del nombre del archivo). Se guardan en el paso de

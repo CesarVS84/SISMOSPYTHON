@@ -97,10 +97,20 @@ a propósito.
   1.1 inestable). El criterio de `CF.py` era correcto.
 * **Absorción de la CPML**: con una fuente suave la CPML corregida llega a **−44 dB**
   (−54 dB con `Rcoef = 1e-5`) frente a −6.5 dB de una pared rígida.
-* **Fuente de dos nodos**: el esquema (derivadas promediadas en celda) tiene un modo
-  de tablero `(-1)^(i+j)` con derivada nula: no se propaga ni se absorbe. Una fuente
-  puntual lo puede excitar, y deja un residuo que parece una mala absorción. Tu par
-  diagonal (50 en `(i,j)`, 90 en `(i+1,j+1)`) tiene contenido nulo en ese modo.
+* **Rebotes que parecen de la CPML y vienen de la fuente**: la capa corregida absorbe
+  bien (−66 dB con una fuente suave), pero con tu fuente de dos nodos (50 en `(i,j)`, 90
+  en `(i+1,j+1)`, con la velocidad impuesta solo en esos nodos) el eco medido es de
+  −23 dB y se ven rebotes por todo el dominio. Causas: (1) tras el pulso los nodos
+  quedan fijos en velocidad cero, un obstáculo rígido que dispersa; (2) una fuente
+  puntual excita ondas de 2 a 4 nodos de largo, incluido el modo de tablero
+  `(-1)^(i+j)` del esquema (derivada nula: no se propaga ni se absorbe), que ninguna
+  capa absorbe. No depende de `k_max`, `f0`, `Rcoef`, la potencia del perfil ni del
+  espesor. Solución: repartir la misma velocidad impuesta en una gaussiana (`sigma`
+  1 a 2 nodos); con `sigma = 1.5` el eco baja a −65 dB y la energía residual en el
+  núcleo a los 10 s pasa de 1.2·10⁻² a 7·10⁻⁶ del pico. Está activada por defecto
+  (`CF.FUENTE_SIGMA` en `codigos_sugeridos`, `FUENTE_SIGMA` en `CPML.py` de la raíz;
+  `None` restituye la fuente original). Una variante con fuerzas de cuerpo se descartó:
+  irradia una forma de onda distinta de la del original.
 * **Amortiguamiento**: `vel_damping = 5e-3` en la capa y `damp = 1e-3` fuera
   introducen una discontinuidad y empeoran la CPML ~9 dB. En `damp = 1e-3` por paso el
   campo se atenúa como `e^(-0.5 t)` con `dt = 0.002`, o sea 1/1800 a los 15 s.

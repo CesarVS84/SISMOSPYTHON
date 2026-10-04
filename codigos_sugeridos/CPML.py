@@ -144,6 +144,30 @@ def aplicar_fuente(vx, vy, fuente50, fuente90, rc, rs, nx):
         vy[p] = rs
 
 
+@njit(cache=True)
+def asignar_fuente(vx, vy, idx, peso, ax, ay):
+    for n in range(idx.shape[0]):
+        vx[idx[n]] = peso[n]*ax
+        vy[idx[n]] = peso[n]*ay
+
+
+def crear_fuente_suave(F, sigma, nx, ny):
+    '''Índices y pesos de la fuente suave: una gaussiana (valor 1 en el centro, desviación
+    sigma en nodos) en cada nodo F == 50 (signo +) y en cada F == 90 (signo -).'''
+    pesos = {}
+    R = int(np.ceil(4*sigma))
+    for valor, signo in ((50, 1.), (90, -1.)):
+        for i0, j0 in np.argwhere(np.asarray(F) == valor):
+            g = {}
+            for j in range(max(j0-R, 1), min(j0+R+1, ny-1)):
+                for i in range(max(i0-R, 1), min(i0+R+1, nx-1)):
+                    g[i+nx*j] = np.exp(-((i-i0)**2+(j-j0)**2)/(2*sigma**2))
+            for k, v in g.items():
+                pesos[k] = pesos.get(k, 0.) + signo*v
+    idx = np.array(list(pesos.keys()), dtype=np.int64)
+    return idx, np.array([pesos[k] for k in idx])
+
+
 @njit(parallel=True, fastmath=True, nogil=True, cache=True)
 def construir_Sb(Sbxx, Sbyy, Sbxy, Sxx, Syy, Sxy, nx, ny):
     '''Esfuerzos con borde (nx+1)*(ny+1): Sb[i, j] = S[i-1, j-1]; contorno nulo.'''
@@ -195,7 +219,7 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
             theta=np.radians(CF.thetag), P=(CF.pml_points_x1, CF.pml_points_x2,
                                             CF.pml_points_y1, CF.pml_points_y2),
             usar_jih=CF.USAR_JIH, carpeta=None, instantaneas=INSTANTANEAS,
-            esfuerzo_inicial=None, verbose=True, registrar_campo=None):
+            esfuerzo_inicial=None, verbose=True, registrar_campo=None, fuente_sigma=None):
     """Avanza nt pasos de tiempo.
 
     modelo : dict con aa (nx*ny), lambdaa, mu (celdas), F (nx, ny) y, si usar_jih,
@@ -203,6 +227,9 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     perfiles : dict de CBA.crear_perfiles().
     fuente_r : función r(t) de la fuente (fuente.py).
     estaciones : lista de [i, j]; la última se guarda como "fa" (fuente).
+    fuente_sigma : si es un número (nodos), las velocidades fuente_r(t) se reparten en una
+                   gaussiana alrededor de cada nodo F (fuente suave); si es None, se imponen
+                   solo en los nodos F (como en el programa original). Ver CF.FUENTE_SIGMA.
     Devuelve el registro de velocidad de las estaciones, [estación, paso, (vx, vy)]."""
     P1, P2, Q1, Q2 = P
     nn = nx*ny
@@ -213,6 +240,8 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
     b = c + 2*d
     fuente50 = np.argwhere(np.asarray(modelo['F']) == 50).astype(np.int64)
     fuente90 = np.argwhere(np.asarray(modelo['F']) == 90).astype(np.int64)
+    if fuente_sigma:
+        idx_fs, peso_fs = crear_fuente_suave(modelo['F'], fuente_sigma, nx, ny)
 
     vx, vy, vx_n, vy_n = (np.zeros(nn) for _ in range(4))
     Sxx, Sxy, Syy, Sxx_n, Sxy_n, Syy_n = (np.zeros(nc) for _ in range(6))
@@ -254,7 +283,11 @@ def simular(modelo, perfiles, fuente_r, estaciones, nx=CF.nx, ny=CF.ny,
         t = n*dt
         # Fuente: se impone sobre las velocidades del paso anterior
         rt = fuente_r(t)
-        aplicar_fuente(vx, vy, fuente50, fuente90, rt*np.cos(theta), rt*np.sin(theta), nx)
+        if not fuente_sigma:
+            aplicar_fuente(vx, vy, fuente50, fuente90, rt*np.cos(theta), rt*np.sin(theta), nx)
+        else:
+            # velocidad impuesta como en el original, pero repartida en una gaussiana
+            asignar_fuente(vx, vy, idx_fs, peso_fs, rt*np.cos(theta), -rt*np.sin(theta))
 
         paso_velocidad(vx_n, vy_n, vx, vy, Sxx, Sxy, Syy, aa, damp, dt, dx, dy,
                        ms[0], ms[1], ms[2], ms[3], ms_o[0], ms_o[1], ms_o[2], ms_o[3],
@@ -342,7 +375,7 @@ def main(rapido=False, carpeta='salida'):
         esf = ((CF.nx-1)*175 + 200, CF.six, CF.siy, CF.sixy)
 
     nt = 300 if rapido else CF.nt
-    registro = simular(modelo, perfiles, fuente.r, estaciones, nt=nt, carpeta=carpeta,
+    registro = simular(modelo, perfiles, fuente.r, estaciones, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
                        esfuerzo_inicial=esf, instantaneas=None if rapido else INSTANTANEAS)
     guardar_estaciones(registro, carpeta)
     print('Resultados en la carpeta:', os.path.abspath(carpeta))

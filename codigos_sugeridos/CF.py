@@ -61,6 +61,12 @@ FMAX_FUENTE = 8.0
 #Nivel (dB, respecto del máximo del espectro) a partir del cual se considera
 #que ya no hay energía a frecuencias mayores que FMAX_FUENTE.
 NIVEL_FUENTE_DB = -40.0
+#Ancho (desviación estándar, en nodos) de la gaussiana en que se reparte la velocidad
+#impuesta en cada nodo de la fuente (F = 50 y F = 90). Con None se impone solo en los
+#nodos F, como en el programa original; eso deja los nodos fijos en cero después del
+#pulso (un obstáculo rígido) y excita ondas de 2 a 4 nodos de largo que la CPML no
+#absorbe: el eco medido con la capa sube de -66 dB a -23 dB.
+FUENTE_SIGMA = 1.5
 #Ángulo de la dirección de apertura de la fuente respecto del eje x (grados)
 thetag = 30.
 

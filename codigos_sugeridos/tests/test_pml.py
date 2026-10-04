@@ -1,6 +1,7 @@
-"""La CPML absorbe: con la fuente del usuario (par de nodos en diagonal) y la
-velocidad promediada en 2x2 (se elimina el modo de tablero, que ni se propaga ni se
-absorbe), el eco es al menos 20 dB menor que con una pared rígida."""
+"""La CPML absorbe. Con la fuente del usuario repartida en una gaussiana (CF.FUENTE_SIGMA)
+el eco queda bajo -50 dB respecto de la onda directa; con los dos nodos fijos del original
+solo se llega a -23 dB (ondas cortas y obstáculo rígido que la capa no puede absorber).
+La velocidad se promedia en 2x2 para quitar el modo de tablero."""
 import numpy as np
 import CF, TOP, CBA, CPML
 
@@ -16,7 +17,7 @@ def ricker(t):
     return 5.*(1-2*a)*np.exp(-a)
 
 
-def _correr(N, P):
+def _correr(N, P, sigma):
     m = TOP.modelo_desde_superficie(np.full(N, N+10.), nx=N, ny=N)           # todo roca
     ic = N//2
     F = np.zeros((N, N))
@@ -29,14 +30,25 @@ def _correr(N, P):
     def cb(n, vx, vy):
         sal.append(0.25*(vx[k0]+vx[k0+1]+vx[k0+N]+vx[k0+N+1]))
     CPML.simular(dict(aa=m['aa'], lambdaa=m['lambdaa'], mu=m['mu'], F=F), perf, ricker, [[ic, ic]], nx=N, ny=N, dx=dx, dy=dy,
-                 dt=dt, nt=nt, damp=0., theta=np.radians(30.), P=(P, P, P, P), verbose=False, registrar_campo=cb)
+                 dt=dt, nt=nt, damp=0., theta=np.radians(30.), P=(P, P, P, P), verbose=False, registrar_campo=cb,
+                 fuente_sigma=sigma)
     return np.array(sal)
 
 
-def test_absorcion():
-    ref = _correr(600, 0)                    # dominio grande: sin ecos en la ventana
-    rigido = _correr(200, 0)
-    pml = _correr(200, 30)
-    e_rig = np.abs(rigido-ref).max()/np.abs(ref).max()
-    e_pml = np.abs(pml-ref).max()/np.abs(ref).max()
-    assert 20*np.log10(e_rig/e_pml) > 20
+def _error_db(sigma):
+    ref = _correr(600, 0, sigma)             # dominio grande: sin ecos en la ventana
+    rigido = _correr(200, 0, sigma)
+    pml = _correr(200, 30, sigma)
+    f = lambda x: 20*np.log10(np.abs(x-ref).max()/np.abs(ref).max())
+    return f(rigido), f(pml)
+
+
+def test_absorcion_fuente_suave():
+    rigido, pml = _error_db(CF.FUENTE_SIGMA)
+    assert pml < -50 and rigido - pml > 50
+
+
+def test_fuente_de_dos_nodos_es_peor():
+    _, pml_suave = _error_db(CF.FUENTE_SIGMA)
+    _, pml_nodos = _error_db(None)
+    assert pml_nodos > pml_suave + 20
