@@ -142,3 +142,21 @@ de onda S.
    ángulo del tramo `c → c+1`; los casos 3 y 6 de `CBO` ya lo usan así, el 4 y el 5 no).
 3. Umbral entre los casos 1 y 2: el código usa `tan >= 2`, los comentarios dicen 1.
 4. `cp`: ¿la velocidad P máxima de tu modelo?
+
+## 6. Visualización (`codigos_sugeridos/`)
+
+Se ejecutan después de `python CPML.py` y leen la carpeta `salida/`:
+
+* `graficas.py --t 3.5`: mapa de la onda en ese tiempo (vx, vy y |v|) sobre la
+  topografía, con el aire, la capa CPML y las estaciones E1–E9 y la fuente F.
+  Puede dibujar varios tiempos (`--t 2 4 6`) o un solo campo (`--campo vy`).
+* `espectrograma.py`: espectrograma (STFT, ventana de Hann) de cada estación y una
+  segunda figura con su espectro de amplitud, con la línea de 8 Hz.
+* `animacion.py`: video MP4 (o GIF si no hay ffmpeg) con todas las instantáneas y
+  escala de color fija.
+* `visual_comun.py`: funciones compartidas (lectura de resultados y dibujo del modelo).
+
+Requieren `matplotlib` (y `ffmpeg` para MP4); no usan `scipy`. Se probaron con una
+simulación completa de 15 s del volcán sintético. En los espectrogramas casi toda la
+energía queda bajo 1 Hz; por encima de 8 Hz queda un piso de unos −45 a −50 dB, que es
+la fuente (−40 dB a 8 Hz) más ruido numérico de la malla.
