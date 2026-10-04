@@ -27,3 +27,17 @@ def test_espectro_cae_al_nivel_a_8_hz():
     # y el original tenía mucho más contenido a 8 Hz
     po = np.abs(np.fft.rfft(r_original(t)))
     assert 20*np.log10(po[np.argmin(abs(f-8.))]/po.max()) > CF.NIVEL_FUENTE_DB + 3
+
+
+def test_sismo_dura_varios_segundos_y_no_excede_8_hz():
+    dt = 0.005
+    t = np.arange(0, 15, dt)
+    p = fuente.sismo(t)
+    assert abs(np.abs(p).max() - 9.245) < 0.01
+    # energía sostenida durante varios segundos (no un solo pulso)
+    activo = t[np.abs(p) > 0.05*np.abs(p).max()]
+    assert activo.max() > 3.0
+    P = np.abs(np.fft.rfft(p, 2**16))
+    f = np.fft.rfftfreq(2**16, dt)
+    banda = (f > 7.5) & (f < 8.5)
+    assert 20*np.log10(P[banda].mean()/P.max()) < CF.NIVEL_FUENTE_DB + 0.5

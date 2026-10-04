@@ -146,6 +146,18 @@ y aparece coda. Ajustable en `CF.FMAX_FUENTE` y `CF.NIVEL_FUENTE_DB` (−40, −
 energía sobre 8 Hz (más dispersión numérica). Con 8 Hz la malla da 8.2 puntos por
 longitud de onda S.
 
+**Fuente tipo sismo (por defecto).** Un solo pulso no es un sismo: el sismograma muestra
+apenas el pulso pasando y rebotando en la topografía (en un medio homogéneo no hay coda).
+Con `CF.TIPO_FUENTE = 'sismo'` (`fuente.sismo`) la fuente es una ruptura de duración finita:
+un evento principal en t = 0 seguido de `CF.SISMO_N` = 80 subeventos en `CF.SISMO_DURACION`
+= 5 s, con amplitud que decae como `exp(-t/SISMO_TAU)`, signo aleatorio (semilla fija) y
+cada uno con la forma del pulso original. Está normalizada a la misma amplitud máxima
+(9.245) y su contenido a 8 Hz es ≤ −20 dB (medido −27 dB), así que el límite de 8 Hz se
+mantiene. Resultado: llegada impulsiva, tren de ondas de unos 5 s y decaimiento
+(`'pulso'` recupera la fuente anterior). Con esto no se simula coda por dispersión en
+heterogeneidades; si la quieres, habría que añadir variaciones aleatorias de velocidad
+al modelo.
+
 Animaciones: las estaciones cambian de color a la llegada teórica de la onda P
 (`r/vp`, naranja) y de la S (`r/vs`, magenta), y esas llegadas se marcan en los
 sismogramas. `animacion.py --ventana-sismograma S` limita la ventana de tiempo mostrada.

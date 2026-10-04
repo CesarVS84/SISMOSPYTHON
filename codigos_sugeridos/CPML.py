@@ -393,7 +393,7 @@ def main(rapido=False, carpeta='salida'):
         esf = ((CF.nx-1)*175 + 200, CF.six, CF.siy, CF.sixy)
 
     nt = 300 if rapido else CF.nt
-    registro = simular(modelo, perfiles, fuente.r, estaciones, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
+    registro = simular(modelo, perfiles, fuente.fuente_activa(), estaciones, nt=nt, carpeta=carpeta, fuente_sigma=CF.FUENTE_SIGMA,
                        esfuerzo_inicial=esf, guardar_cada=CF.SNAPSHOT_CADA,
                        instantaneas=INSTANTANEAS if (CF.GUARDAR_INSTANTANEAS_ANTIGUAS and not rapido) else None)
     guardar_estaciones(registro, carpeta)

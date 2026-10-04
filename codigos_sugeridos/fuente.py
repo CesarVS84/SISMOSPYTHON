@@ -19,6 +19,7 @@ de forma monótona, así que "frecuencia máxima" queda bien definida.
 """
 
 import numpy as np
+import CF
 from CF import FMAX_FUENTE, NIVEL_FUENTE_DB
 
 w = 1256.5
@@ -73,6 +74,47 @@ def s(t):
 
 def o(t):
     return _forma(t, h3)
+
+
+def _subeventos():
+    """Tiempos y amplitudes (con signo) de la ruptura: evento principal en t = 0 y luego
+    CF.SISMO_N subeventos con tiempos aleatorios en [0, SISMO_DURACION] (más densos al
+    inicio), amplitud que decae como exp(-t/SISMO_TAU) y signo aleatorio. Se normaliza para
+    que la energía espectral total sea la de un solo pulso: el contenido sobre 8 Hz es
+    el mismo que el del pulso."""
+    g = np.random.default_rng(CF.SISMO_SEMILLA)
+    t = np.sort(g.uniform(0, 1, CF.SISMO_N)**1.5*CF.SISMO_DURACION)
+    a = g.uniform(0.3, 1.0, CF.SISMO_N)*np.exp(-t/CF.SISMO_TAU)*g.choice([-1., 1.], CF.SISMO_N)
+    t = np.concatenate([[0.], t])
+    a = np.concatenate([[1.], 0.55*a])          # el evento principal domina
+    return t, a/np.sqrt((a**2).sum())
+
+
+_t_sub, _a_sub = _subeventos()
+
+
+def sismo(t):
+    """Ruptura de duración finita: suma de pulsos r(t - t_k) con amplitud a_k."""
+    t = np.asarray(t, dtype=float)
+    a1, a2 = _tasas(h1)
+    tau = t[..., None] - _t_sub
+    p = np.where(tau > 0, np.exp(-a1*np.maximum(tau, 0)) - np.exp(-a2*np.maximum(tau, 0)), 0.)
+    return _escala*w*(p*_a_sub).sum(axis=-1)
+
+
+def _calcular_escala():
+    # mismo valor máximo que el pulso original (9.245), para que la amplitud sea comparable
+    tt = np.arange(0, CF.SISMO_DURACION+3, 0.002)
+    return 9.2448/np.abs(sismo(tt)).max()
+
+
+_escala = 1.
+_escala = _calcular_escala()
+
+
+def fuente_activa():
+    """Función de la fuente según CF.TIPO_FUENTE."""
+    return sismo if CF.TIPO_FUENTE == 'sismo' else r
 
 
 def frecuencia_maxima(h, nivel_db=NIVEL_FUENTE_DB, fmax_busqueda=200.):

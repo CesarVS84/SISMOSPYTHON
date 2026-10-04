@@ -70,6 +70,15 @@ NIVEL_FUENTE_DB = -20.0
 #pulso (un obstáculo rígido) y excita ondas de 2 a 4 nodos de largo que la CPML no
 #absorbe: el eco medido con la capa sube de -66 dB a -23 dB.
 FUENTE_SIGMA = 1.5
+#Tipo de fuente: 'sismo' = ruptura de duración finita (un evento principal seguido de
+#subeventos, ver fuente.sismo); 'pulso' = un solo pulso (la fuente original). Con un solo
+#pulso el sismograma muestra apenas el pulso viajando y rebotando en la topografía; un
+#sismo real es un tren de ondas de varios segundos.
+TIPO_FUENTE = 'sismo'
+SISMO_DURACION = 5.0     #s: duración de la ruptura (hasta el último subevento)
+SISMO_N = 80             #número de subeventos después del evento principal
+SISMO_TAU = 1.8          #s: decaimiento de la amplitud de los subeventos (tipo Omori/coda)
+SISMO_SEMILLA = 7        #semilla del generador (el mismo sismo en cada ejecución)
 #Ángulo de la dirección de apertura de la fuente respecto del eje x (grados)
 thetag = 30.
 
