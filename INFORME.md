@@ -178,6 +178,37 @@ una gaussiana de `FUENTE_SIGMA` celdas, solo en celdas de roca):
 - Marcas P y S de las animaciones: ahora suman el retraso con que parte la fuente
   (`fuente.retraso_inicio`, 0.22 s). Medido: la señal llegaba 0.16 a 0.23 s después de
   distancia/vp en las 9 estaciones.
+- **Atenuación explícita (Q).** `damp` es un rozamiento por paso (v <- v(1-damp)); equivale a
+  Q(f) = 2 pi f dt/damp (verificado con las simulaciones: el pico cae e^(-damp t/(2 dt))).
+  Ahora se define con `CF.Q_ROCA` = 150 a `CF.F_REF_Q` = 5 Hz (damp = 1.05e-3, casi igual al 1e-3
+  de antes, que era Q = 157 a 5 Hz, plausible para un volcán). Medido: sin atenuación el 99 %
+  de la energía llega a los 10 s; con ella, a los 6.8 s; es decir, la atenuación sí acorta la
+  coda, y ahora es un parámetro físico que se puede elegir (`None` = sin atenuación, estable).
+  Corrección: en un mensaje anterior dije que damp = 1e-3 era Q = 47 a 3 Hz; con la fórmula
+  correcta es Q = 94 a 3 Hz.
+- **Validación contra la solución analítica** (`solucion_analitica.py`, `validacion_analitica.py`,
+  `tests/test_analitica.py`, figura `ejemplos/validacion_analitica.png`): doble cupla en un
+  medio homogéneo e infinito, función de Green 2-D con funciones de Hankel (verificada contra
+  la ecuación de onda: residuo 7.6e-4, contra 2.7 si se quita un término). Con ocho
+  receptores a 3 km:
+  * amplitud absoluta simulada / analítica = 0.99 a 1.01 (signo, orientación de 30° y el
+    factor dt/(dx dy) de la fuente, correctos);
+  * error L2 de la forma de onda: 6 % sobre los ejes y 19 % en las diagonales (12.6 % medio),
+    que es dispersión numérica de la malla: con dx = 25 m baja a 2.2 % y 3.3 % (2.8 % medio),
+    convergencia de orden ~2.
+  La validación detectó un error mío: el centro de la fuente de momento estaba corrido media
+  celda (35 m en diagonal) por sumar 0.5 de más; corregido en `codigos_sugeridos/CPML.py` y en la
+  raíz. Los ejemplos se regeneraron.
+- **Magnitud y paso 2-D a 3-D.** `CF.M0` ya no es un número arbitrario: M0 = 10^(1.5 Mw + 9.1) / L,
+  con `CF.MW` = 3.27 y `CF.LONGITUD_FALLA` = 100 m (los de tu TOP.py original: A = 100 m x 33 m,
+  mu = 3e10 Pa, U = 1 m), que da 1e12 N, el mismo valor de antes. Una simulación 2-D decae como
+  1/sqrt(r) y una fuente real como 1/r; `conversion_2d3d.py` convierte una traza a su equivalente
+  3-D (semiderivada en el tiempo por L/sqrt(2 pi c r)), verificado contra la fórmula 3-D de campo
+  lejano de Aki y Richards (amplitud dentro de 3 %). `python conversion_2d3d.py salida` imprime
+  la tabla. Para Mw 3.27 la velocidad máxima 3-D equivalente (fase S) es 0.015 a 0.12 cm/s a 2.7 a
+  6.5 km, frente a 0.5 a 2.3 cm/s de la traza 2-D; es del orden bajo de lo que dan las relaciones
+  empíricas para esa magnitud, pero es una aproximación de campo lejano, una sola fase y sin
+  topografía: úsese como orden de magnitud.
 - Energía sobre 8 Hz: 0.3 a 3 % del total, consistente con el nivel de −25 dB a 8 Hz de
   la fuente; no es ruido numérico.
 - **La carpeta raíz** (`CPML.py`) tiene ahora la misma fuente de momento y la misma

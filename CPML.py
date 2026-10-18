@@ -392,7 +392,12 @@ from CPMLD import damp_profiles, cpml_stress, cpml_vel, init_memory_velocity, in
 
 # In[12]:
 
-damp = 1e-3
+# Atenuación: v <- v*(1-damp) por paso equivale a Q(f) = 2*pi*f*dt/damp. Se define por el factor
+# de calidad Q_ROCA a la frecuencia F_REF_Q (volcán: Q entre 30 y 200). Con Q = 150 a 5 Hz y
+# dt = 0.002, damp = 4.2e-4 (el 1e-3 de antes era Q = 63 a 5 Hz con este dt). None = sin atenuación.
+Q_ROCA = 150.
+F_REF_Q = 5.0
+damp = 0. if Q_ROCA is None else 2*np.pi*F_REF_Q*dt/Q_ROCA
 npow = 2.0
 pi = 3.141592654
 '''revisar topografia si coincide con los parametros del cpml'''
@@ -408,7 +413,7 @@ assert 2*pml_points_x1 < nx and 2*pml_points_y1 < ny, 'La CPML no cabe en la mal
 cp = vp if not HETEROGENEIDAD else _vp_max
 
 
-vel_damping = 5e-3
+vel_damping = damp          # el mismo valor que en el interior (uno distinto genera reflexiones)
 Rcoef = 0.001
 f0=7.0
 k_max_pml = 3.0
@@ -552,7 +557,9 @@ if FUENTE_SIGMA:
 # FMAX_FUENTE (8 Hz). Detalles en codigos_sugeridos/fuente.py.
 # FUENTE_TIPO = 'velocidad' recupera la fuente original (velocidad impuesta, r(t)).
 FUENTE_TIPO = 'momento'
-M0 = 1.0e12                  # N (por unidad de longitud: el problema es 2-D)
+MW = 3.27                    # magnitud de momento (la de TOP.py original: A = 100 m x 33 m, mu = 3e10, U = 1 m)
+LONGITUD_FALLA = 100.        # m: el problema es 2-D, el momento es por unidad de longitud de falla
+M0 = 10**(1.5*MW + 9.1)/LONGITUD_FALLA     # N (= 1e12 con los valores de arriba)
 FMAX_FUENTE = 8.0            # Hz
 NIVEL_FUENTE_DB = -20.0      # dB de la velocidad radiada a FMAX_FUENTE
 SISMO_DURACION, SISMO_N, SISMO_TAU, SISMO_SEMILLA = 1.2, 12, 0.6, 7   # subeventos de la ruptura
@@ -587,7 +594,7 @@ m_xx, m_yy, m_xy = -np.sin(2*_phi), np.sin(2*_phi), np.cos(2*_phi)
 
 def _celdas_fuente(sigma):
     nodos = np.argwhere(np.asarray(F) > 0).astype(float)
-    ci, cj = nodos[:, 0].mean()+0.5, nodos[:, 1].mean()+0.5
+    ci, cj = nodos[:, 0].mean(), nodos[:, 1].mean()   # punto medio de los nodos de la fuente
     R = int(np.ceil(4*sigma))
     idx, pesos = [], []
     for j in range(max(int(cj)-R, 0), min(int(cj)+R+1, ny-1)):

@@ -77,9 +77,15 @@ FUENTE_SIGMA = 1.5
 #                    radiada es bipolar y no deja desplazamiento permanente. Ver fuente.py.
 #  'velocidad_pulso' fuente original: un solo pulso de velocidad impuesta.
 TIPO_FUENTE = 'momento'
-#Momento sísmico por unidad de longitud (N, el problema es 2-D). Fija la amplitud de las
-#velocidades: con 1e12 N las velocidades a unos km son del orden de cm/s a dm/s.
-M0 = 1.0e12
+#Magnitud de momento Mw del sismo simulado y longitud de la falla (m). El problema es 2-D:
+#la falla es una línea infinita y el momento se da por unidad de longitud, M0 = M0_3D / L, con
+#M0_3D = 10^(1.5 Mw + 9.1) N m (Hanks y Kanamori). Los valores por defecto son los de TOP.py
+#original: A = L*W = 100 m x 33 m, mu = 3e10 Pa, deslizamiento U = 1 m  ->  Mw = 3.27 y M0 = 1e12 N.
+#La conversión de una traza 2-D a la amplitud 3-D equivalente está en conversion_2d3d.py.
+MW = 3.27
+LONGITUD_FALLA = 100.
+M0_3D = 10**(1.5*MW + 9.1)
+M0 = M0_3D/LONGITUD_FALLA
 #Ruptura con subeventos (todos del mismo mecanismo, momento total M0): el evento principal
 #en t = 0 y SISMO_N subeventos más débiles en los siguientes SISMO_DURACION segundos, con
 #amplitud que decae como exp(-t/SISMO_TAU). SISMO_N = 0 da un único evento.
@@ -113,9 +119,18 @@ k_max_pml = 3.0
 #Frecuencia que fija alpha_max = pi*f0 de la CPML. La fuente tiene casi toda su
 #energía por debajo de ~2 Hz, y la CPML absorbe mal por debajo de f0.
 f0 = 1.0
-#Amortiguamiento viscoso por paso (v <- v*(1-damp)). Se usa el MISMO valor en
-#toda la malla: un valor distinto dentro de la capa genera reflexiones.
-damp = 1e-3
+#Atenuación de la roca. El esquema amortigua la velocidad en cada paso, v <- v*(1-damp),
+#lo que equivale a un rozamiento d/dt y a una atenuación con Q(f) = 2*pi*f*dt/damp (crece
+#con la frecuencia; verificado: el pico cae e^(-damp*t/(2*dt)), no e^(-damp*t/dt)). Se
+#define por el factor de calidad Q_ROCA a la frecuencia F_REF_Q, y damp se calcula de ahí.
+#Con Q_ROCA = 150 a 5 Hz damp vale 1.05e-3 (casi el 1e-3 de antes, que era Q = 157 a 5 Hz):
+#esa atenuación es física y acorta la coda (medido: el 99 % de la energía llegaba a los 6.8 s,
+#contra 10 s sin atenuación). Para un edificio volcánico se usan Q entre 30 y 200 a 1 - 10 Hz.
+#Q_ROCA = None desactiva la atenuación (damp = 0; medido estable). Se usa el MISMO valor en
+#toda la malla: un valor distinto dentro de la capa CPML genera reflexiones.
+Q_ROCA = 150.
+F_REF_Q = 5.0
+damp = 0. if Q_ROCA is None else 2*np.pi*F_REF_Q*dt/Q_ROCA
 vel_damping = damp
 
 # ---------------------------------------------------------------- Superficie

@@ -173,7 +173,7 @@ def crear_fuente_momento(F, b, sigma, nx, ny):
     (en celdas) centrada en el punto medio de los nodos de la fuente (F == 50 y F == 90).
     Solo se usan celdas de roca (b > 0). Devuelve (índices de celda, pesos).'''
     nodos = np.argwhere(np.asarray(F) > 0).astype(float)
-    ci, cj = nodos[:, 0].mean()+0.5, nodos[:, 1].mean()+0.5   # centro de celda = nodo + 1/2
+    ci, cj = nodos[:, 0].mean(), nodos[:, 1].mean()   # punto medio de los nodos (en unidades de nodo)
     R = int(np.ceil(4*sigma))
     nc = nx-1
     idx, pesos = [], []
