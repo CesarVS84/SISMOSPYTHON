@@ -1,6 +1,6 @@
 # Ejemplos de salida
 
-Generados con `codigos_sugeridos` sobre el **volcán sintético** (no con tu `snif.npy`): simulación
+Generados con `codigos_sugeridos` sobre **tu `snif.npy`** (con tus estaciones y tu fuente): simulación
 completa de 15 s, campos guardados cada 0.01 s.
 
 * `onda_vx.mp4`, `onda_vy.mp4`, `onda_modulo.mp4`: animación del campo con el sismograma de la estación

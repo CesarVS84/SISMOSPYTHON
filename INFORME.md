@@ -221,15 +221,32 @@ Animaciones: las estaciones cambian de color a la llegada teórica de la onda P
 (`r/vp`, naranja) y de la S (`r/vs`, magenta), y esas llegadas se marcan en los
 sismogramas. `animacion.py --ventana-sismograma S` limita la ventana de tiempo mostrada.
 
-## 5. Decisiones que necesito de ti
+## 5. Decisiones (resueltas con tu `snif.npy`)
 
-1. ¿Qué hace realmente `prueba.py[::-1]`? Si tu `snif.npy` ya está en otro marco, dime
-   cómo está definido.
-2. ¿Quieres seguir con Jih? Habría que validar las fórmulas contra el artículo y
-   decidir los índices de los casos 4 y 5 (`prueba.py` guarda en la columna `c` el
-   ángulo del tramo `c → c+1`; los casos 3 y 6 de `CBO` ya lo usan así, el 4 y el 5 no).
-3. Umbral entre los casos 1 y 2: el código usa `tan >= 2`, los comentarios dicen 1.
-4. `cp`: ¿la velocidad P máxima de tu modelo?
+El `snif.npy` que adjuntaste (501 x 501) tiene la convención que suponía `TOP.py`:
+`snif[fila, columna]`, un nodo "1" (superficie) por columna, aire (2) en las filas mayores, la
+fila crece hacia arriba. Superficie entre las filas 345 y 393 (relieve de 2.4 km), cima en la
+columna 259 (x = 13 km). Tus estaciones E1-E7 están exactamente sobre la superficie, E8 y E9 a
+5.7 y 6.0 km de profundidad, y la fuente a 3.0 km bajo la superficie (columna 350). Con eso:
+
+1. **`prueba.py[::-1]`**: el marco de `snif.npy` es el supuesto, así que invertir los
+   arreglos planos (giro de 180°) deja las banderas de Jih lejos de la superficie. Se
+   mantiene como está en `prueba.py`: sin la inversión.
+2. **Jih**: probado sobre tu superficie real con las fórmulas de `CBO.py` activadas, las
+   velocidades llegan a 1270 m/s en 5 s (contra 0.01 m/s sin Jih): sigue siendo inestable.
+   Decisión: **apagado** (`ACTIVAR_JIH = False`, `CF.USAR_JIH = False`). La superficie libre
+   se modela con aire sin masa y masa efectiva por nodo (Rayleigh 0.911 vs. 0.919 teórico).
+3. **Umbral entre los casos 1 y 2**: tu superficie tiene pendiente máxima 1 (45°): ningún
+   tramo cumple `|tan| >= 2` (el caso 1 no ocurre), y 92 de 500 tramos tienen `|tan|` = 1,
+   que el código clasifica como suave (caso 2) y los comentarios, como empinada. Como Jih
+   está apagado no cambia ningún resultado; si algún día se retoma, hay que decidir con el
+   artículo de Jih en la mano.
+4. **`cp`**: se calcula del modelo (velocidad P máxima de `lambda + 2 mu` y `rho`: 5669 m/s
+   homogéneo; 7171 m/s con la heterogeneidad del 20 %) en vez del 3300 m/s fijo del original.
+
+`codigos_sugeridos` usa tu `snif.npy` si existe (en la carpeta actual o en `SNIF_NPY`) y entonces
+también tus estaciones y tu fuente (`TOP.REAL = True`); sin el archivo usa el volcán sintético.
+Los ejemplos de `codigos_sugeridos/ejemplos/` están hechos con tu modelo real.
 
 ## 6. Visualización (`codigos_sugeridos/`)
 

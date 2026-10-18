@@ -1,9 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-TOP.py: modelo de densidades y rigideces, topografía (volcán sintético) y fuente.
+TOP.py: modelo de densidades y rigideces, topografía y fuente.
 
-Es un reemplazo autocontenido del TOP.py original, que leía la topografía de
-'snif.npy'. Usa las mismas convenciones:
+La topografía viene de 'snif.npy' (matriz (501, 501), snif[fila, columna]: 2 = aire, 1 = superficie,
+un nodo por columna; la fila crece hacia arriba) si el archivo existe, en la carpeta actual o en la
+indicada por la variable de entorno SNIF_NPY; con él se usan también las estaciones y la fuente del
+modelo del usuario (TOP.REAL = True). Si no existe, se usa un volcán sintético (cono truncado) con
+estaciones propias, de modo que el código y las pruebas funcionan sin el archivo. Usa las mismas
+convenciones que el TOP.py original:
 
     - j crece hacia ARRIBA: el aire está en los valores grandes de j.
     - superficie libre: en cada columna i, el nodo (i, hs[i]).
@@ -28,6 +32,7 @@ rodean: aa = 4/(rho*n_celdas). Con aa = 1/rho en todos los nodos (como en el
 programa original) la onda de Rayleigh viaja un 5 % más lenta.
 """
 
+import os
 import numpy as np
 import CF
 from CF import nx, ny, dx, dy, Rho, Lambda, Mu
@@ -80,7 +85,22 @@ def modelo_desde_superficie(hs, nx=nx, ny=ny, rho0=Rho, lam0=Lambda, mu0=Mu):
 
 
 # ------------------------------------------------------------------- Modelo
-hs = perfil_volcan()
+def _ruta_snif():
+    for r in (os.environ.get('SNIF_NPY'), 'snif.npy', os.path.join(os.path.dirname(os.path.abspath(__file__)), 'snif.npy')):
+        if r and os.path.isfile(r):
+            return r
+    return None
+
+
+RUTA_SNIF = _ruta_snif()
+REAL = RUTA_SNIF is not None
+if REAL:
+    _snif = np.load(RUTA_SNIF, allow_pickle=False)
+    assert _snif.shape == (nx+1, ny+1), 'snif.npy debe ser de %dx%d' % (nx+1, ny+1)
+    assert np.all((_snif == 1).sum(axis=0) == 1), 'cada columna de snif.npy debe tener un nodo de superficie'
+    hs = np.argmax(_snif == 1, axis=0)[:nx].astype(float)             # fila de la superficie por columna
+else:
+    hs = perfil_volcan()
 _m = modelo_desde_superficie(hs)
 js = _m['js']
 too = _m['too']
@@ -93,7 +113,7 @@ aa = _m['aa']
 # Como en el TOP.py original: F = 50 en el nodo fa y F = 90 en (fa+1, fa+1)
 # (velocidades opuestas, ver CPML.py), a 3 km bajo la cima (60 nodos).
 ic = nx//2
-fa = [ic, int(js[ic]) - 60]
+fa = [350, int(js[350]) - 60] if REAL else [ic, int(js[ic]) - 60]    # modelo real: [350, 293]
 F = np.zeros((nx, ny))
 F[fa[0], fa[1]] = 50
 F[fa[0]+1, fa[1]+1] = 90
@@ -107,10 +127,15 @@ def _sup(i):
     return [i, int(js[i])]
 
 
-estaciones = [
-    _sup(ic-90), _sup(ic-60), _sup(ic-30),     # flanco izquierdo (sube hacia la derecha)
-    _sup(ic+30), _sup(ic+60), _sup(ic+90),     # flanco derecho (baja hacia la derecha)
-    _sup(ic+130),                              # llanura
-    [ic-50, int(js[ic]) - 80],                 # dos estaciones en profundidad
-    [ic+50, int(js[ic]) - 80],
-]
+if REAL:       # estaciones del usuario (E1-E7 sobre la superficie, E8 y E9 en profundidad)
+    estaciones = [[170, 356], [190, 360], [210, 368], [261, 392], [281, 381], [301, 369],
+                  [321, 361], [200, 250], [300, 250]]
+    assert all(e[1] == js[e[0]] for e in estaciones[:7]), 'E1-E7 deben estar sobre la superficie de snif.npy'
+else:
+    estaciones = [
+        _sup(ic-90), _sup(ic-60), _sup(ic-30),     # flanco izquierdo (sube hacia la derecha)
+        _sup(ic+30), _sup(ic+60), _sup(ic+90),     # flanco derecho (baja hacia la derecha)
+        _sup(ic+130),                              # llanura
+        [ic-50, int(js[ic]) - 80],                 # dos estaciones en profundidad
+        [ic+50, int(js[ic]) - 80],
+    ]
