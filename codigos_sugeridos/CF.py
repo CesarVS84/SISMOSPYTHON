@@ -91,6 +91,15 @@ SISMO_SEMILLA = 7        #semilla del generador (el mismo sismo en cada ejecuci�
 #de la doble cupla, y con las fuentes de velocidad la dirección de apertura
 thetag = 30.
 
+# -------------------------------------------------------------- Heterogeneidad
+#Variaciones aleatorias suaves de lambda y mu de la roca (ver heterogeneidad.py): generan la
+#coda por dispersión. HETEROGENEIDAD es la desviación estándar relativa de la rigidez
+#(0 = roca homogénea); LONGITUD_CORRELACION en metros (de orden la longitud de onda S
+#a 8 Hz, ~400 m, que es cuando más dispersa).
+HETEROGENEIDAD = 0.20
+LONGITUD_CORRELACION = 300.
+SEMILLA_HETEROGENEIDAD = 11
+
 # --------------------------------------------------------------- Absorbente
 npow = 2.0
 # Espesor (en nodos) de la capa en cada lado. En el lado del aire (j grande) es 0:

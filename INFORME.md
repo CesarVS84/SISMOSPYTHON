@@ -168,8 +168,23 @@ una gaussiana de `FUENTE_SIGMA` celdas, solo en celdas de roca):
 - `CF.TIPO_FUENTE = 'velocidad_pulso'` recupera la fuente original (velocidad impuesta).
   Se guarda `salida/tasa_momento.npy` (t, dM0/dt). La estación `F` es ahora la velocidad en
   un nodo junto a la falla, no la función fuente.
-- Limitación: en un medio homogéneo no hay coda larga por dispersión en heterogeneidades
-  (solo la que genera la topografía).
+- **Coda por heterogeneidad** (`heterogeneidad.py`, `CF.HETEROGENEIDAD` = 0.20,
+  `LONGITUD_CORRELACION` = 300 m): lambda y mu se multiplican por un campo aleatorio suave
+  (desviación 20 %, la razón vp/vs se conserva, la roca de aire no cambia, semilla fija).
+  Medido sobre las 9 estaciones: el 99 % de la energía llega entre 5 y 8.6 s (con roca
+  homogénea, entre 3 y 5.4 s), y las ondas P y S siguen bien definidas. vp máxima
+  7171 m/s, Courant 0.72 (CPML.main lo comprueba: aborta si pasa de 0.95). Con 0 se
+  recupera el medio homogéneo.
+- Marcas P y S de las animaciones: ahora suman el retraso con que parte la fuente
+  (`fuente.retraso_inicio`, 0.22 s). Medido: la señal llegaba 0.16 a 0.23 s después de
+  distancia/vp en las 9 estaciones.
+- Energía sobre 8 Hz: 0.3 a 3 % del total, consistente con el nivel de −25 dB a 8 Hz de
+  la fuente; no es ruido numérico.
+- **La carpeta raíz** (`CPML.py`) tiene ahora la misma fuente de momento y la misma
+  heterogeneidad (`FUENTE_TIPO`, `HETEROGENEIDAD` al inicio de esas secciones). Probada con
+  un `snif.npy` sintético en una corrida de 1.2 s: junto a la falla el pico es 5.5 cm/s
+  (5.7 con `codigos_sugeridos`). Las estaciones de la raíz están en las posiciones de tu
+  modelo real; no pude correr tu `snif.npy` completo porque no está en el repositorio.
 
 Animaciones: las estaciones cambian de color a la llegada teórica de la onda P
 (`r/vp`, naranja) y de la S (`r/vs`, magenta), y esas llegadas se marcan en los

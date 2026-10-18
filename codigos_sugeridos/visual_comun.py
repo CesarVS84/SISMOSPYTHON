@@ -17,6 +17,7 @@ import matplotlib.patheffects as pe
 
 import CF
 import TOP
+import fuente
 from CPML import INSTANTANEAS
 
 # Colores (superficies claras, texto en tinta neutra; la identidad la dan el marcador y la etiqueta)
@@ -63,9 +64,10 @@ def distancia_a_la_fuente(nombre):
 
 def tiempos_llegada(nombre):
     """(t_P, t_S) teóricos en s: distancia en línea recta / vp y / vs. Para la fuente (F)
-    la distancia es cero. No incluyen el retraso de la fuente (la tasa de momento tiene su máximo en ~0.3 s)."""
+    la distancia es cero. Incluyen el retraso con que parte la fuente (fuente.retraso_inicio)."""
     r = distancia_a_la_fuente(nombre)
-    return r/CF.vp, r/CF.vs
+    d = fuente.retraso_inicio()
+    return d + r/CF.vp, d + r/CF.vs
 
 
 def serie(vx, vy, componente):

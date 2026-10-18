@@ -433,11 +433,17 @@ def main(rapido=False, carpeta='salida'):
 
     assert CF.dx == CF.dy, 'El esquema supone dx == dy'
     # velocidad P máxima del modelo (para la CPML)
-    cp = float(np.sqrt(((TOP.lambdaa + 2*TOP.mu)[TOP.mu > 0]/CF.Rho).max()))
+    import heterogeneidad
+    lambdaa, mu = heterogeneidad.perturbar(TOP.lambdaa, TOP.mu)
+    cp = float(np.sqrt(((lambdaa + 2*mu)[mu > 0]/CF.Rho).max()))
+    if CF.HETEROGENEIDAD:
+        print('Heterogeneidad: %.0f %% en lambda y mu, longitud de correlación %.0f m; vp máx = %.0f m/s, Courant = %.2f' % (
+            100*CF.HETEROGENEIDAD, CF.LONGITUD_CORRELACION, cp, cp*CF.dt/min(CF.dx, CF.dy)))
+        assert cp*CF.dt/min(CF.dx, CF.dy) < 0.95, 'dt demasiado grande para esta heterogeneidad'
     perfiles = CBA.crear_perfiles(cp=cp)
 
     # sj = -1: el modelo tiene j hacia arriba; si = -1: segunda pasada para los tramos que bajan
-    modelo = dict(aa=TOP.aa, lambdaa=TOP.lambdaa, mu=TOP.mu, F=TOP.F, too=TOP.too,
+    modelo = dict(aa=TOP.aa, lambdaa=lambdaa, mu=mu, F=TOP.F, too=TOP.too,
                   jih=[(prueba.elevation, prueba.boundary_flag_velocity, 1, -1),
                        (prueba.elevation_izq, prueba.boundary_flag_velocity_izq, -1, -1)])
     estaciones = list(TOP.estaciones) + [TOP.sour1]

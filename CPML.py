@@ -154,6 +154,27 @@ print('Velocidad onda S: ', vs)
 # In[5]:
 LAMBDA = lambdaa
 MU = mu
+
+# Heterogeneidad de la roca: lambda y mu se multiplican por (1 + e), con e un campo aleatorio
+# gaussiano suave (desviación HETEROGENEIDAD, longitud de correlación LONGITUD_CORRELACION en m).
+# Genera la coda por dispersión; en roca homogénea el sismograma termina pronto. 0 = homogénea.
+HETEROGENEIDAD = 0.20
+LONGITUD_CORRELACION = 300.
+SEMILLA_HETEROGENEIDAD = 11
+if HETEROGENEIDAD:
+    _g = np.random.default_rng(SEMILLA_HETEROGENEIDAD)
+    _kx = np.fft.fftfreq(nx-1, dx)[None, :]
+    _ky = np.fft.fftfreq(ny-1, dx)[:, None]
+    _e = np.fft.ifft2(np.fft.fft2(_g.standard_normal((ny-1, nx-1))) *
+                      np.exp(-0.5*(2*np.pi*LONGITUD_CORRELACION/np.sqrt(2))**2*(_kx**2+_ky**2))).real
+    _e = (_e-_e.mean())/_e.std()                       # celdas con índice i + (nx-1)*j
+    _fac = 1. + HETEROGENEIDAD*np.clip(_e, -3, 3).ravel()
+    _roca = np.asarray(mu) > 0
+    LAMBDA = np.where(_roca, LAMBDA*_fac, LAMBDA)
+    MU = np.where(_roca, MU*_fac, MU)
+    _vp_max = np.sqrt(((LAMBDA+2*MU)[_roca]/Rho).max())
+    print('Heterogeneidad: vp máxima = %.0f m/s, Courant = %.2f' % (_vp_max, _vp_max*dt/min(dx, dy)))
+    assert _vp_max*dt/min(dx, dy) < 0.95, 'dt demasiado grande para esta heterogeneidad'
 RHO = rho
 
 # Modelo consistente en la superficie libre. Una celda es de roca solo si sus 4
@@ -384,7 +405,7 @@ assert 2*pml_points_x1 < nx and 2*pml_points_y1 < ny, 'La CPML no cabe en la mal
 # Velocidad P que usa la capa. Antes: cp = 3300. (distinta de la velocidad P
 # del modelo, que es vp). Si el modelo de TOP.py tiene una velocidad P mayor,
 # use esa.
-cp = vp
+cp = vp if not HETEROGENEIDAD else _vp_max
 
 
 vel_damping = 5e-3
@@ -520,7 +541,77 @@ def asignar_fuente(vx, vy, idx, peso, rc, rs):
 if FUENTE_SIGMA:
     idx_fuente, peso_fuente = _pesos_fuente(FUENTE_SIGMA)
 
+# ---------------------------------------------------------------------------
+#  Fuente de momento (doble cupla), FUENTE_TIPO = 'momento' (por defecto)
+# ---------------------------------------------------------------------------
+# Una falla es un tensor de momento M_ij(t) = M0 m_ij S(t) inyectado como esfuerzo en las
+# celdas de la fuente: S_ij -= m_ij (dM0/dt) dt / (dx dy) * peso. La onda radiada (derivada de
+# la tasa de momento) es bipolar y no deja desplazamiento permanente, a diferencia de imponer
+# una velocidad unipolar. La tasa de momento es una suma de gaussianas (evento principal y
+# subeventos); su ancho se calcula para que la VELOCIDAD radiada caiga NIVEL_FUENTE_DB a
+# FMAX_FUENTE (8 Hz). Detalles en codigos_sugeridos/fuente.py.
+# FUENTE_TIPO = 'velocidad' recupera la fuente original (velocidad impuesta, r(t)).
+FUENTE_TIPO = 'momento'
+M0 = 1.0e12                  # N (por unidad de longitud: el problema es 2-D)
+FMAX_FUENTE = 8.0            # Hz
+NIVEL_FUENTE_DB = -20.0      # dB de la velocidad radiada a FMAX_FUENTE
+SISMO_DURACION, SISMO_N, SISMO_TAU, SISMO_SEMILLA = 1.2, 12, 0.6, 7   # subeventos de la ruptura
+
+def _sigma_gauss(fmax, nivel_db):
+    objetivo = 10**(nivel_db/20.)
+    lo, hi = 1., 50.
+    for _ in range(200):
+        medio = 0.5*(lo+hi)
+        if medio*np.exp((1-medio**2)/2) > objetivo:
+            lo = medio
+        else:
+            hi = medio
+    return 1./(2*np.pi*fmax/(0.5*(lo+hi)))
+
+sigma_t = _sigma_gauss(FMAX_FUENTE, NIVEL_FUENTE_DB)
+t0_fuente = 6*sigma_t
+_g = np.random.default_rng(SISMO_SEMILLA)
+_ts = np.sort(_g.uniform(0, 1, SISMO_N)**1.5*SISMO_DURACION)
+_as = 0.6*_g.uniform(0.3, 1.0, SISMO_N)*np.exp(-_ts/SISMO_TAU)
+_t_sub = np.concatenate([[0.], _ts])
+_a_sub = np.concatenate([[1.], _as])
+_a_sub = _a_sub/_a_sub.sum()
+
+def tasa_momento(t):
+    x = (t - t0_fuente - _t_sub)/sigma_t
+    return M0*(_a_sub*np.exp(-0.5*x**2)).sum()/(sigma_t*np.sqrt(2*np.pi))
+
+# Doble cupla en el plano: plano de falla a thetag grados del eje x
+_phi = np.radians(thetag)
+m_xx, m_yy, m_xy = -np.sin(2*_phi), np.sin(2*_phi), np.cos(2*_phi)
+
+def _celdas_fuente(sigma):
+    nodos = np.argwhere(np.asarray(F) > 0).astype(float)
+    ci, cj = nodos[:, 0].mean()+0.5, nodos[:, 1].mean()+0.5
+    R = int(np.ceil(4*sigma))
+    idx, pesos = [], []
+    for j in range(max(int(cj)-R, 0), min(int(cj)+R+1, ny-1)):
+        for i in range(max(int(ci)-R, 0), min(int(ci)+R+1, nx-1)):
+            if (LAMBDA+2*MU)[i+(nx-1)*j] > 0:
+                idx.append(i+(nx-1)*j)
+                pesos.append(np.exp(-((i+0.5-ci)**2+(j+0.5-cj)**2)/(2*sigma**2)))
+    pesos = np.array(pesos)
+    return np.array(idx, dtype=np.int64), pesos/pesos.sum()
+
+@njit(cache=True)
+def inyectar_momento(Sxx, Syy, Sxy, idx, peso, ex, ey, exy):
+    for n in range(idx.shape[0]):
+        Sxx[idx[n]] -= peso[n]*ex
+        Syy[idx[n]] -= peso[n]*ey
+        Sxy[idx[n]] -= peso[n]*exy
+
+if FUENTE_TIPO == 'momento':
+    idx_momento, peso_momento = _celdas_fuente(1.5)
+
+
 def source(t):
+    if FUENTE_TIPO == 'momento':
+        return                    # la fuente de momento se inyecta en los esfuerzos
     rt = r(t)
     if FUENTE_SIGMA:
         asignar_fuente(vx, vy, idx_fuente, peso_fuente, rt*np.cos(theta), rt*np.sin(theta))
@@ -613,6 +704,11 @@ for n in range(nt+1):
                 pml_points_x1, pml_points_x2, pml_points_y1,
                 pml_points_y2, b_pml, c_pml, d_pml, dx,dy,dt,nx,ny)
     
+    #Fuente de momento (doble cupla) sobre los esfuerzos nuevos
+    if FUENTE_TIPO == 'momento':
+        e_m = tasa_momento(t)*dt/(dx*dx)
+        inyectar_momento(Sxxn, Syyn, Sxyn, idx_momento, peso_momento, m_xx*e_m, m_yy*e_m, m_xy*e_m)
+
     #Desplazamientos
     Unewx += vx_out*dt
     Unewy += vy_out*dt
